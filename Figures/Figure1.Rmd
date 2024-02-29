@@ -1,0 +1,248 @@
+---
+title: "Figure1"
+output: html_document
+date: "2024-02-29"
+---
+# Load pacakges
+```{r setup, include=FALSE}
+library(Seurat)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(circlize)
+library(ComplexHeatmap)
+library(pals)
+```
+
+# Load objects
+```{r setup, include=FALSE}
+scRNA <- readRDS("") #Available in zenodo
+codex <-  readRDS()#Available in zenodo
+#source("/omics/odcf/analysis/OE0285_projects/human-bone-marrow/Lymphoma/bd_rhapsody/2021_May/Analysis/Figures/Figure_config.R")
+```
+
+# Panels 
+## A
+```{r PanelA, fig.width=7, fig.height=7, include=FALSE}
+#Create object which contain all the sample information metadata
+pac <- data.frame(PatientID = c("FL-6", "rLN-3", "DLBCL-4", "DLBCL-1", "FL-4", "DLBCL-3", "rLN-4", 
+                                "rLN-5", "FL-1", "DLBCL-2", "rLN-2", "FL-5", "DLBCL-8", "DLBCL-6", 
+                                "rLN-1", "FL-3", "DLBCL-5", "FL-2", "DLBCL-7", 
+                                "FL-7", "rLN-6", 
+                                "FL-8", "FL-9", "DLBCL-9", "rLN-7", "DLBCL-10", "DLBCL-11"), 
+                  
+                    scRNAseq = c(rep("scRNAseq", 19), rep("no", 8)),  
+                    codex = c("no", "codex", "no", "no", "codex", "no", "no", "codex", "no", "codex", "no", "codex", rep("no", 7), rep("codex", 8)),
+                     Age = c(71, 72, 68, 66, 41, 60, 58, 61, 81, 80, 42, 66, 64, 76, 39, 76, 66, 58, 71, 
+                             63, 32, 54, 74, 62, 45, 53, 69), 
+                     Sex = c("f", "f", "f", "m", "m", "f", "f", "m", "f", "m", "f", "m", "m", "m", "m", "f", "m", "f", "f", 
+                             "m", "m", "m", "m", "m", "f", "m", "m"), 
+                    Disease = c("FL", "rLN", "DLBCL", "DLBCL", "FL", "DLBCL", "rLN", "rLN", "FL", 
+                                 "DLBCL", "rLN", "FL", "DLBCL", "DLBCL", "rLN", "FL", "DLBCL", "FL", "DLBCL", 
+                                 "FL", "rLN", "FL", "FL", "DLBCL", "rLN", "DLBCL", "DLBCL"), 
+                     stringsAsFactors = FALSE)
+
+pac = gather(pac, profile, information, -PatientID, -Age)
+pac <- pac %>% arrange(desc(PatientID))
+pac$x = as.numeric(factor(pac$PatientID, levels = unique(pac$PatientID)))
+pac = pac %>% group_by(PatientID) %>% mutate(y = 1:n() + 10)
+
+# set angle of text (need to optimise for your figure)
+lab = filter(pac, !duplicated(PatientID))
+angle = 270
+lab$ang = seq(from=(angle/nrow(lab))/1.5, to=(1.5*(angle/nrow(lab)))-angle, length.out=nrow(lab)) + 80
+lab$hjust = 0
+lab$hjust[which(lab$ang < -90)] <- 1
+lab$ang[which(lab$ang < -90)] <- (180+lab$ang)[which(lab$ang < -90)]
+
+ggplot() + geom_rect(data = pac, aes(x = x, y = y, 
+                                     fill = factor(information, levels = c("rLN", "FL", "DLBCL", "f", "m", "codex", "no", "scRNAseq")), 
+                                     xmin = x -1, 
+                                     xmax = x, 
+                                     ymin = y - 1, 
+                                     ymax = y), colour = "white", size = 0.3) + 
+  coord_polar(theta = "x") + # theta x means centre on x axis
+  theme_classic() + 
+  scale_y_discrete() + 
+  ylim(0,max(pac$y)*1.5)  + # ylim adjusts the space around the circle
+  xlim(0,max(pac$x)*(1/0.75)) + # xlim sets how the circle would be, for e.g. if it's 1/0.75 it's 270 degrees
+  geom_text(data = lab, 
+            aes(x=x-0.5, 
+                y=y+3.2, 
+                label=Age, 
+                angle=ang, 
+                hjust=hjust), size=3) + 
+  scale_fill_manual(values = c("rLN"= "#964d98", "FL"= "#5D9FC9", "DLBCL"= "#5cb88b", "m" = "#91D1C2B2", "f" = "#ffa69e", "no" = "#DEDEDE", "codex" = "#708090", 
+                               "scRNAseq" = "#708090")) + 
+  theme(panel.background=element_blank(), 
+        axis.title=element_blank(), 
+        panel.grid=element_blank(), 
+        axis.text.x=element_blank(),
+        axis.ticks=element_blank(), 
+        axis.text.y=element_blank(), 
+        #legend.position = "none", # use legend position none to remove legend
+        axis.line = element_blank(), 
+        text = element_text(size=5))
+```
+
+## B
+### left
+```{r Panel B left, fig.height=8, fig.width=12, fig.cap="UMAP of RNA sequencing data"}
+data <- Embeddings(object = scRNA[["UMAP_new"]])[(colnames(scRNA)), c(1, 2)]
+data <- as.data.frame(data)
+data$Clusters_paper <- scRNA$Clusters_paper
+data$Type_binned <- scRNA$group
+data$Clusters_paper <- scRNA$Clusters_paper
+
+col_vec_umap <- annotation_colors$Clusters_paper
+
+col_vec <-  unlist(lapply(data$Clusters_paper, function(x){index=which(x==names(col_vec_umap))
+col_vec_umap[index]}))
+data$color_patient <- col_vec
+
+umap_full <- ggplot(data,aes(UMAP_1, UMAP_2)) + 
+  ggforce::geom_voronoi_tile(aes(fill = Clusters_paper, group = -1L), max.radius =0.05) +
+  theme_void()+
+  scale_fill_manual(values= col_vec) 
+
+```
+
+### right
+```{r Panel B right, fig.height=8, fig.width=8, fig.cap="UMAP of segemtet codex images"}
+anno_broad=c("BEC"="#F5818D",
+             "FDC"="#088B1A",
+             "B"="#0C80ED",
+             "Mesenchymal"="#BEDEA6",
+             "LEC"="#FF9709",
+             "Myeloid"="snow3",
+             "PC"="#2753BA",
+             "T"="#8B008B",
+             "NK"="#7E770E"
+)
+
+
+codex@meta.data <- codex@meta.data %>% mutate(anno_broad_v2 = case_when(Merged_final_binned %in% c("B", "B_prol")~"B",
+                                                           Merged_final_binned %in% c("TTOX_exh", "TTOX_memory", "CD4T_naive",  "CD8T_naive")~"T", 
+                                                           Merged_final_binned %in% c("TH_memory", "TH", "TFH", "TPR", "TREG", "TTOX", "NKT")~"T", 
+                                                           Merged_final_binned %in% c("Granulo", "Macro", "MC", "DC")~"Myeloid", 
+                                                           TRUE ~ as.character(Merged_final_binned)
+))
+
+#codex@meta.data$anno_broad_v2 <- x$anno_broad
+
+Idents(codex) <- codex$anno_broad_v2
+codex_sub <- subset(x = codex, downsample = 30000)
+
+codex_sub <- codex_sub %>% FindVariableFeatures(verbose=T) %>%
+  ScaleData() %>% 
+  RunPCA(npcs=56-1, approx=F, verbose=T) %>%
+  FindNeighbors(dims = 1:56-1, verbose=T) %>%
+  FindClusters(resolution = c(1), verbose = T) %>% 
+  RunUMAP(dims = 1:56-1, return.model = TRUE, verbose = T, n.neighbors = 200, reduction.name = "umapX", min.dist = 0.5)
+
+codex_sub$umap1 <- codex_sub@reductions$umap@cell.embeddings[,1]
+codex_sub$umap2 <- codex_sub@reductions$umap@cell.embeddings[,2]
+
+cluster_centers <- codex_sub@meta.data %>%
+  group_by(anno_broad_v2) %>%
+  summarise(center_x = mean(umap1), center_y = mean(umap2))
+
+codex_sub@meta.data %>% ggplot(aes(umap1, umap2, color= anno_broad_v2)) +
+  ggrastr::geom_point_rast(data=codex_sub@meta.data, aes(color=anno_broad_v2),size=0.01)+
+  scale_color_manual(values =anno_broad)+theme_classic()+
+  ggrepel::geom_text_repel(data = cluster_centers, aes(x = center_x, y = center_y, label = anno_broad_v2), color="black", size = 8)
+
+```
+
+## C FIJI output - no need for code
+
+## D
+```{r Panel D}
+#tmp_csv: output from nhood analysis script found here: https://github.com/ljopp-saile/LNStroma/blob/main/Figure1_01_nhood.py
+tmp_csv <- read.csv("/g/scb2/zaugg/amathiou/2021July_LNS012/6.CODEX/20221011_nhood_analysis/20221025_Nhood_Nolan2022/20221027_AllSamples_sliding_withK.csv", row.names = 1)
+tmp_csv <- tmp_csv %>% gather(colnames(tmp_csv)[grep("Nhood_k", colnames(tmp_csv))], key = "Nhood_K", value = "Nhood_ID")
+tmp_csv$sample <- paste0(tmp_csv$diag, " ", tmp_csv$slide)
+
+#We decided on k = 17 that we then further bin based on cluster distribution
+k17 <- tmp_csv[which(tmp_csv$Nhood_K == "Nhood_k17"), ]
+k17 <- mutate(k17, Annotation = case_when(Nhood_ID %in% c(0, 1) ~ "BEC-rich T zone", 
+                                          Nhood_ID %in% c(2, 11) ~ "Plasma cells", 
+                                          Nhood_ID %in% c(4, 12, 14, 15)~ "B prol niche", 
+                                          Nhood_ID %in% c(5, 6, 10, 13, 16) ~ "T zone", 
+                                          Nhood_ID == 9 ~ "Lymphatic sinus", 
+                                          Nhood_ID %in% c(3, 7, 8) ~ "Follicle cluster"))
+
+#Visualize the nhood on all samples but show in Figure 1 only a selection
+```
+
+## E 
+```{r}
+nhood_cluster_counts <- as.data.frame(table(k17$Annotation, k17$name))
+colnames(nhood_cluster_counts) <- c("Nhood", "CellType", "Freq")
+#do the analysis for all nhoods and then subset with the ones of interest
+
+#I need to create 2 additional columns - 1 total number of cells per celltype
+for (d in unique(nhood_cluster_counts$CellType)){
+  nhood_cluster_counts[which(nhood_cluster_counts$CellType == d), "total_celltype"] <- sum(nhood_cluster_counts[which(nhood_cluster_counts$CellType == d), "Freq"])
+}
+for (d in unique(nhood_cluster_counts$Nhood)){
+  nhood_cluster_counts[which(nhood_cluster_counts$Nhood == d), "total_nhood"] <- sum(nhood_cluster_counts[which(nhood_cluster_counts$Nhood == d), "Freq"])
+}
+
+htmp_or <- data.frame(row.names = unique(nhood_cluster_counts$Nhood))
+total_t <- sum(nhood_cluster_counts$Freq)
+#per cell type and per patient
+for (ct in unique(nhood_cluster_counts$CellType)){
+  for (d in unique(nhood_cluster_counts$Nhood)){
+    cont_table <- data.frame()
+    #for this cell type and cluster, the number of cells
+    cont_table[d, ct] <- nhood_cluster_counts[which(nhood_cluster_counts$CellType == ct & nhood_cluster_counts$Nhood == d), "Freq"]
+    
+    #for this nhood the rest of the cells
+    cont_table[d, 'rest'] <- (nhood_cluster_counts[which(nhood_cluster_counts$CellType == ct & nhood_cluster_counts$Nhood == d), "total_nhood"] - cont_table[d, ct])
+    
+    #for this cell type the rest of the cells in the object
+    cont_table['rest', ct] <- (nhood_cluster_counts[which(nhood_cluster_counts$CellType == ct & nhood_cluster_counts$Nhood == d), "total_celltype"] - cont_table[d, ct])
+    
+    #The rest of the cells nhood and cluster wise, i.e. nhood no cell type no
+    cont_table['rest', 'rest'] <- (total_t - cont_table[d, ct] - cont_table[d, "rest"] - cont_table['rest', ct])
+    nhood_cluster_counts[which(nhood_cluster_counts$CellType == ct & nhood_cluster_counts$Nhood == d), 'Fisher_pvalue'] <- fisher.test(cont_table, alternative='two.sided',
+                                                                                                            conf.int	= TRUE)$p.value
+    nhood_cluster_counts[which(nhood_cluster_counts$CellType == ct & nhood_cluster_counts$Nhood == d), 'estimate'] <- fisher.test(cont_table, alternative='two.sided', 
+                                                                                                               conf.int	= TRUE)$estimate
+     
+  }
+}
+nhood_cluster_counts$log2or <- log2(nhood_cluster_counts$estimate + 0.001)
+nhood_cluster_counts$padj <- p.adjust(nhood_cluster_counts$Fisher_pvalue, method = "bonferroni")
+
+#### Final plot
+htmp <- nhood_cluster_counts[, c("Nhood", "CellType", "log2or")] %>% spread(Nhood, log2or)
+rownames(htmp) <- htmp$CellType
+htmp[htmp > 5] <- 5
+htmp$CellType <- NULL
+col_fun = circlize::colorRamp2(c(min(htmp), 0, max(htmp)), c("#007EA7", "white", "#AD2E24"))
+Heatmap(t(htmp), cluster_rows = T, cluster_columns = F, col = col_fun, name = "log2OR")
+```
+
+## F left
+```{r}
+# Barplot of the nhood and with color == patient
+# Note that thee colors below are not the same ones with the paper
+cluster_patient_representation <- as.data.frame(table(k17$Annotation, k17$sample))
+colnames(cluster_patient_representation) <- c("Nhood", "Sample", "Freq")
+plot(ggplot(cluster_patient_representation, aes(x = Nhood, y = Freq, fill = Sample)) + 
+    geom_bar(stat = "identity", position = "fill", color = "black") + 
+    theme_classic() + 
+    scale_fill_manual(values=c(brewer.greens(8), brewer.oranges(10), brewer.purples(10))) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)))
+```
+
+## F right
+```{r}
+htmp_df <- as.data.frame.matrix(table(k17$Annotation, k17$diag))
+htmp_df <- (htmp_df/rowSums(htmp_df))* 100
+Heatmap(htmp_df, name = "%", col = c("white", brewer.reds(5)))
+```
+
