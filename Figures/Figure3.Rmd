@@ -1,0 +1,378 @@
+---
+title: "Figure3"
+output: html_document
+date: "2024-02-29"
+---
+
+# Load pacakges
+```{r setup, include=FALSE}
+library(Seurat)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(tidyverse)
+library(UpSetR)
+library(circlize)
+library(ComplexHeatmap)
+```
+
+# Load objects
+```{r setup, include=FALSE}
+scRNA <- readRDS("") #Available in zenodo
+source("/path/to/Figure_config.R")
+```
+
+## B
+## Note that for SCENIC output you can directly read targene_df from Zenodo
+## The following ˜20 lines illustrate how to preprocess the SCENIC output in order to get a network
+```{r}
+# SCENIC output-target genes are assigned to each TF
+#Note: This is what we use for network re-construction
+reg_files <- list.files("/g/scb2/zaugg/amathiou/2021July_LNS012/4.SCENIC/20211216_LNStroma/output/regulon", 
+                       pattern = ".*\\(\\+\\)\\.tsv$", 
+                       full.names = T)
+
+df_list <- list()
+for (file in reg_files) {
+  # the regex matches any characters except "/" that are right before a "(+).tsv" and thereby fetches the TF-names
+  TF_name <- str_extract(file, "[^\\/]+(?=\\(\\+\\)\\.tsv)")
+  regulon_df <- read.csv(file, sep = "\t", header = F, col.names = c("target", "count"))
+  regulon_df <- mutate(regulon_df, TF = TF_name) 
+  df_list[[TF_name]] <- regulon_df
+}
+# targene_df_raw contains all target genes for the TFs, even the ones with
+# counts < 80 that were not used for the activity calculation
+empty_df <- data.frame(TF = character(), target = character(),  count = numeric())
+targene_df_raw <- purrr::reduce(df_list, bind_rows, .init = empty_df)
+# make another copy with only the target genes that were used for the activity calculation (observed in >80% of runs; set in min-regulon-gene-occurrence in config.yaml
+targene_df <- filter(targene_df_raw, count > 90) # This is the GRN used in C
+```
+
+## B
+```{r}
+targene_df <- readRDS("") #Available in Zenodo, you can read directly this and skip the part above
+
+#Read in differentially expressed genes
+#Output from chunk of code from Figure 2 
+#DE_all <- FindMarkers(tmp_obj, ident.2 = "rLN", ident.1 = "DLBCL", pseudocount.use = 0.01, test.use = "MAST", only.pos = F, logfc.threshold = 0, assay = "RNA")
+
+de_genes_scenic <- list()
+for (g in c("BEC", "LEC", "FRC")){
+  de_genes <- read.table(paste0("/g/scb2/zaugg/amathiou/2021July_LNS012/3.DiffExpression/20220901_Abe_Gate/", g, "_DEgenes_MAST_dlbclVSrln.tsv"))
+  de_genes_scenic[[paste0(g, " DLBCL")]] <- rownames(de_genes[which(de_genes$p_val_adj < 0.05 & de_genes$avg_log2FC > 1), ])
+  de_genes_scenic[[paste0(g, " rLN")]] <- rownames(de_genes[which(de_genes$p_val_adj < 0.05 & de_genes$avg_log2FC < -1), ])
+}
+pop_de <- list()
+pop_de[["BEC"]] <- unique(unlist(de_genes_scenic[c("BEC DLBCL", "BEC rLN")]))
+pop_de[["LEC"]] <- unique(unlist(de_genes_scenic[c("LEC DLBCL", "LEC rLN")]))
+pop_de[["FRC"]] <- unique(unlist(de_genes_scenic[c("FRC DLBCL", "FRC rLN")]))
+
+#This upset plot is part of supplementary figure8 
+upset(fromList(de_genes_scenic), nsets = 15, order.by = "freq", point.size = 1.5)
+
+#
+sig_TFs <- list()
+fisher_df1 <- list()
+fisher_df2 <- list()
+for (p in c("BEC", "LEC", "FRC")){
+  tmp_genes <- intersect(pop_de[[p]], unique(targene_df$target)) #Take those that are in the network
+  tmp_targene_df <- targene_df[which(targene_df$target %in% tmp_genes), ] #Lets look only at all the DE genes, both conditions
+  dlbcl_genes <- intersect(tmp_genes, de_genes_scenic[[paste0(p, " DLBCL")]])
+  rln_genes <- intersect(tmp_genes, de_genes_scenic[[paste0(p, " rLN")]])
+  count_tfs_genes <- data.frame(TF = unique(tmp_targene_df[which(tmp_targene_df$target %in% tmp_genes), "TF"])) #how many of the condition genes these TFs target
+  rownames(count_tfs_genes) <- count_tfs_genes$TF
+  
+  table_tfs <- data.frame() #Fisher test input
+  for (t in rownames(count_tfs_genes)){
+    #A bit repeatitive with the cont table, but i like the visualization of this table
+    tf_targets <- tmp_targene_df[which(tmp_targene_df$TF == t & tmp_targene_df$target %in% tmp_genes), "target"]
+    count_tfs_genes[t, "DLBCL_TF"] <- length(intersect(tf_targets, dlbcl_genes)) + 1
+    count_tfs_genes[t, "rLN_TF"] <- length(intersect(tf_targets, rln_genes)) + 1
+    count_tfs_genes[t, "DLBCL_rest"] <- length(setdiff(dlbcl_genes, tf_targets)) + 1
+    count_tfs_genes[t, "rLN_rest"] <- length(setdiff(rln_genes, tf_targets)) + 1
+    #Contigency table
+    cont_table <- data.frame()
+    cont_table['DLBCL', t] <- count_tfs_genes[t, "DLBCL_TF"]
+    cont_table['DLBCL', 'rest'] <- count_tfs_genes[t, "DLBCL_rest"]
+    cont_table['rLN', t] <- count_tfs_genes[t, "rLN_TF"]
+    cont_table['rLN', 'rest'] <- count_tfs_genes[t, "rLN_rest"]
+    table_tfs[t, 'TF'] <- t
+    table_tfs[t, 'Fisher_pvalue'] <- fisher.test(cont_table, alternative='two.sided', conf.int = TRUE)$p.value
+    table_tfs[t, 'OR'] <- fisher.test(cont_table, alternative='two.sided', conf.int = TRUE)$estimate
+  }
+  table_tfs$fdr <- p.adjust(table_tfs$Fisher_pvalue, method="fdr")
+  table_tfs$padj <- ifelse(table_tfs$fdr < 0.05, 
+                          "<0.05", 
+                          "n.s.")
+
+  table_tfs$log2OR <- log2(table_tfs$OR)
+  table_tfs <- table_tfs[order(table_tfs$log2OR), ]
+  levels_plot <- rownames(table_tfs)
+
+  #Plot enrichment
+  q3 <- ggplot(table_tfs, aes(x = factor(TF, levels = levels_plot), y = log2OR, fill = padj)) + 
+      geom_bar(stat = "identity") + 
+      theme_bw() + 
+      theme(text = element_text(size = 15), 
+                     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), 
+            legend.position = "right") + xlab("TFs") + 
+    ggtitle(p) + 
+    scale_fill_manual("padj", values = c("n.s." = "#ffe7b1", "<0.05" = "#75cdc8")) # + scale_fill_gradientn(colors = head(viridis(10), 9)
+  # These barplots are part of supplemental figure 8
+  plot(q3)
+
+  #This will be used to actually constract the panel B
+  sig_TFs[[paste0(p, " DLBCL")]] <- table_tfs[which(table_tfs$padj < 0.05 & table_tfs$log2OR > 0), "TF"]
+  sig_TFs[[paste0(p, " rLN")]] <- table_tfs[which(table_tfs$padj < 0.05 & table_tfs$log2OR < 0), "TF"]
+}
+
+#This upset plot is part of supplementary figure 8
+upset(fromList(sig_TFs), nsets = 15, order.by = "freq", point.size = 1.5)
+
+
+# Start of panel B code
+msc_or <- read.table(paste0("/g/scb2/zaugg/amathiou/2021July_LNS012/4.SCENIC/20211216_LNStroma/FisherTF_targets_FRC.tsv"))
+
+plot_tfs <- unique(unlist(sig_TFs))
+#tile plot but with log2fc
+or_df <- data.frame(Gene = plot_tfs, 
+                    BEC = NA,
+                    LEC = NA, 
+                    MSC = NA)
+rownames(or_df) <- or_df$Gene
+or_df$Gene <- NULL
+
+for (g in rownames(or_df)){
+  if (g %in% c(sig_TFs$`BEC DLBCL`, sig_TFs$`BEC rLN`)){
+    or_df[g, "BEC"] <- log2(bec_or[g, "OR"])
+  }
+  if(g %in% c(sig_TFs$`LEC DLBCL`, sig_TFs$`LEC rLN`)){
+    or_df[g, "LEC"] <- log2(lec_or[g, "OR"])
+  }
+  if(g %in% c(sig_TFs$`Mesenchymal DLBCL`, sig_TFs$`Mesenchymal rLN`)){
+    or_df[g, "MSC"] <- log2(msc_or[g, "OR"])
+  }
+}
+col_fun = colorRamp2(c(min(or_df), 0, max(or_df)), c("#8D60B5", "white", "#67B86E"))
+
+Heatmap(or_df, col = col_fun, name = "log2OR") #panel B, not that from this we show in the MS only the FRCs (i.e. Mesenchymal in the object)
+```
+
+# Panels E, F, G
+Object also used for TCR clonal expansion analysis in Figure 3
+Dataset from Roider et al 2024 (Nat Cell Bio)
+5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
+Note that here we only focused on rLN, DLBCL and FL
+```{r Panel E left}
+DF_TCRrep <- readRDS("/g/scb2/zaugg/amathiou/2021July_LNS012/10.TCRseq/202402_TCRrepertoire.rds") #Get info from Zenodo
+
+DF_5prime_umap <- DF_TCRrep %>% 
+  dplyr::select(refUMAP_1, refUMAP_2, predicted.celltype, Entity, PatientID.x, ifng.x) %>% 
+  distinct() %>% 
+  mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL")))
+
+ggplot() + 
+  geom_point(data=DF_5prime_umap %>% 
+               arrange(ifng), aes(x=refUMAP_1, y=refUMAP_2, fill = ifng), size=1.5, stroke=0, shape=21) + 
+  scale_color_gradientn(colors = parula(5)) + 
+  scale_fill_gradientn(colors = parula(5)) + 
+  mytheme_1 +
+  theme(legend.position = "top",
+        legend.text = element_text(size=8),
+        legend.background = element_rect(fill=NA),
+        legend.box = unit("cm", x = 0.01),
+        legend.spacing.x = unit("cm", x = 0.05),
+        legend.spacing.y = unit("cm", x = 0.001),
+        panel.border = element_rect(size=0.25, color="black"),
+        legend.box.spacing = unit(0, units = "cm"),
+        strip.background = element_rect(size=0.25),
+        legend.box.margin = unit(c(0,-12.5,-0.1,0), units = "cm"))
+```
+
+```{r Panel E right}
+set.seed(1)
+df_clonotypes <- 
+  DF_TCRrep %>% 
+  filter(!is.na(raw_clonotype_id)) %>% 
+  filter(!is.na(Entity)) %>% 
+  dplyr::select(Barcode_full, PatientID.x, raw_clonotype_id, refUMAP_1, refUMAP_2, predicted.celltype, Entity) %>% #missing entity
+  distinct() %>% 
+  add_count(PatientID.x, raw_clonotype_id, predicted.celltype) %>% ungroup() %>% 
+  dplyr::select(-Barcode_full) %>% 
+  group_by(PatientID.x, raw_clonotype_id, predicted.celltype) %>%
+  summarise(refUMAP_1=median(refUMAP_1), refUMAP_2=median(refUMAP_2), n, Entity, .groups = "drop") %>% 
+  distinct() %>% 
+  mutate(n=ifelse(n>50, 50, n)) %>% 
+  mutate(Entity=factor(Entity, levels=c("rLN", "DLBCL", "FL"))) %>% 
+  filter(predicted.celltype %in% c(3, 5, 16))
+
+p1 <- ggplot()+
+  geom_point_rast(data=DF_5prime_umap, aes(x=refUMAP_1, y=refUMAP_2), 
+                  size=1.5, stroke=0, shape=21,  fill="lightgrey")+
+  geom_point_rast(data=DF_5prime_umap, aes(x=refUMAP_1, y=refUMAP_2), size=0.2, 
+                  alpha=1, 
+                  stroke=0, shape=21)+
+  geom_point(data=df_clonotypes %>% 
+               filter(n > 2), 
+             aes(x=refUMAP_1, y=refUMAP_2, size=n, color=Entity), shape=21, stroke=0.7, alpha=1)+
+  scale_color_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E"), guide="none")+
+  scale_fill_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E"), guide="none")+
+  scale_size_continuous(range=c(1, 10), 
+                        limits=c(3, 50), 
+                        breaks=c(3, 20, 35, 50),
+                        labels=c("3", "20", "35", "> 50"), 
+                        name = NULL)+
+  #facet_wrap(~Entity, nrow = 1)+
+  geom_text(data = df_clonotypes %>% dplyr::select(PatientID.x, Entity) %>% 
+              distinct() %>% 
+              add_count(Entity), aes(label = paste0("n = ", n)),
+            x = 9.65, y = -6.9, hjust=1, check_overlap = T, size=2.25)+
+  xlab("refUMAP-1")+
+  ylab("refUMAP-2")+
+  mytheme_1+
+  theme(legend.position = "top",
+        legend.text = element_text(size=8),
+        legend.background = element_rect(fill=NA),
+        legend.box = unit("cm", x = 0.01),
+        legend.spacing.x = unit("cm", x = 0.05),
+        legend.spacing.y = unit("cm", x = 0.001),
+        panel.border = element_rect(size=0.25, color="black"),
+        legend.box.spacing = unit(0, units = "cm"),
+        strip.background = element_rect(size=0.25),
+        legend.box.margin = unit(c(0,-12.5,-0.1,0), units = "cm"))
+plot(p1)
+```
+
+```{r Panel F}
+DF_TCRrep_cd8 <- DF_TCRrep[which(DF_TCRrep$predicted.celltype %in% c(3, 5, 16)), ]
+clonotype_df <- as.data.frame.matrix(table(DF_TCRrep_cd8$raw_clonotype_id, DF_TCRrep_cd8$Entity))
+clonotype_freq <- as.data.frame(rowSums(clonotype_df))
+colnames(clonotype_freq) <- "Freq"
+quantile(clonotype_freq$Freq)
+
+#Panel below is for Supplemental Figure 9 - It basically helps us decide on the threshold
+ggplot(clonotype_freq, aes(x = log10(Freq) )) + 
+  geom_density() + 
+  theme_bw() + 
+  #geom_vline(xintercept = log10(quantile(clonotype_freq$Freq, .75, names = F)), 
+  #           linetype="dashed", color = "#F54748", size=1) +
+  geom_vline(xintercept = log10(4), 
+             linetype="dashed", color = "#7F0000", size=1) +
+  xlab("log10(Freq_Clone)") + 
+  ggtitle("2,558 clonotypes")
+#Based on this, we decide that when a clone size equal or greater to 4 it is considered clonally expanded2
+```
+
+```{r Prep for panel G, fig.width=5, fig.height=4}
+df_clonotypes <- 
+  DF_TCRrep_cd8 %>% 
+  filter(!is.na(raw_clonotype_id)) %>% 
+  filter(!is.na(Entity)) %>% 
+  mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL")))
+
+clone_df <- data.frame(Clone = unique(df_clonotypes$raw_clonotype_id))
+clone_df$IFNG <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), function(clonotype){
+  mean(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), "IFNG"])
+  }))
+clone_df$Freq <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), 
+                               function(clonotype){
+  nrow(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), ])
+  }))
+
+clone_df$Expanded <- ifelse(clone_df$Freq >= 4, 
+                            "Expanded", 
+                            "Non-expanded")
+
+# SuppFig9
+ggplot(clone_df, aes(x = log10(Freq), y = IFNG, color = Expanded, fill = Expanded)) + 
+  geom_point() + 
+  theme_bw() + 
+  ggtitle("CD8+ T cells") + 
+  xlab("log10(Clone Size)") + 
+  geom_smooth(method = "lm", se = TRUE, fullrange = F) + 
+  scale_color_manual(values = c("#7F0000", "darkgrey")) + 
+  scale_fill_manual(values = c("#7F0000", "darkgrey"))
+
+clones_meta <- clone_df[, c("Clone", "Expanded")]
+colnames(clones_meta) <- c("raw_clonotype_id", "Expanded")
+df_clonotypes <- merge(df_clonotypes, clones_meta, by = "raw_clonotype_id")
+```
+
+```{r, Panel G left}
+clone_entity_bar <- as.data.frame(table(df_clonotypes$Expanded, df_clonotypes$Entity))
+colnames(clone_entity_bar) <- c("Expanded", "Entity", "Freq")
+
+ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL"))), 
+       aes(y = Freq, x = Entity, label=Freq, color = Expanded, fill = Expanded)) + 
+  geom_bar(stat = "identity", position = "fill", alpha = 0.5) + 
+  scale_color_manual(values = c("#7F0000", "darkgrey")) + 
+  scale_fill_manual(values = c("#B13A2C", "lightgrey")) + theme_classic()
+```
+
+```{r, Panel G right}
+ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) + 
+  geom_boxplot(aes(color = Expanded, fill = Expanded), alpha = 0.5, outlier.size = 0.05) + 
+  theme_bw() + 
+  facet_wrap(~Entity) + 
+  scale_color_manual(values = c("darkgrey", "#7F0000")) +   
+  scale_fill_manual(values = c("lightgrey", "#B13A2C")) + stat_compare_means()
+```
+
+# Panels L and M
+```{r}
+CL_obj <- readRDS(".../seurat_lnsc_coculture_res0.5.rds") #accessible via Zenodo
+CL_obj_sub <- subset(CL_obj, subset= cc_cluster%in% c("LNSC_co", "LNSC_mono"))
+DefaultAssay(CL_obj_sub) <- "RNA"
+```
+
+```{r, Panel L}
+DimPlot(CL_obj_sub, group.by = "cc_cluster", label = T, label.box = T, cols = c("#67B86E", "#D3D3D3"), pt.size = 0.5) + theme(legend.position = "none")
+```
+
+```{r, Panel M}
+#Function to retrieve gene set list 
+get_gsea_genes <- function(msigdb_table,
+                           gsea_term){
+  gsea_genes <- msigdb_table %>% as_tibble() %>% mutate(pathway = gsub("\thttp:", "", V1), genes=V7)
+  gsea_genes <- gsea_genes %>% filter(pathway == gsea_term) %>% dplyr::select(genes) %>% unlist() %>% strsplit2("\t") %>% .[,-1]
+}
+```
+```{r, Panel M}
+Hallmark <- read.table(".../h.all.v7.4.symbols.gmt.txt", sep = "/") #Hallmark gene sets retrieved from http://gsea-msigdb.org
+IFNg_H <- get_gsea_genes(msigdb_table = Hallmark, gsea_term = "HALLMARK_INTERFERON_GAMMA_RESPONSE")
+scores <- list()
+scores[[1]] <- IFNg_H
+CL_obj_sub <- AddModuleScore(object = CL_obj_sub, features = scores, ctrl = 5, name = c("IFNg_H"))
+CL_obj_sub[['Scores']] <- CreateAssayObject(data = t(x = FetchData(object = CL_obj_sub, vars = c("IFNg_H1"))))
+```
+
+```{r, Panel M}
+comparisons <- list(c("LNSC_co", "LNSC_mono"))
+CL_obj_sub@meta.data$cc_cluster <- factor(CL_obj_sub@meta.data$cc_cluster, levels = c("LNSC_mono", "LNSC_co"))
+```
+
+```{r, Panel M}
+VlnPlot(CL_obj_sub, features = "IFNg_H1", group.by = "cc_cluster", pt.size = 0, y.max = 0.9) +
+      stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", hide.ns = FALSE) +
+      geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
+      geom_hline(yintercept = mean(CL_obj_sub$IFNg_H1), linetype = 2) + # Add horizontal line at base mean
+      ggtitle("Hallmark IFN response") + 
+    theme_bw() +
+    theme(text = element_text(size=14), 
+        axis.text.y = element_text(size = 10, color = "black"),
+        axis.text.x = element_text(size = 13, color = "black", angle = 0, hjust = 0.5),
+        axis.title.y = element_text(size = 13),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 13, face = "bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        aspect.ratio = 1,
+        legend.position="none")+
+      labs(x = "", y = "Module Score\n") +
+      scale_x_discrete(labels= c("Mono", "Co")) +
+      scale_fill_manual(values=c("#D3D3D3", "#67B86E")) +
+      NoLegend()
+```
+

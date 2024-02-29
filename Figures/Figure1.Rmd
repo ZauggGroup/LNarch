@@ -20,7 +20,7 @@ library(pals)
 ```{r setup, include=FALSE}
 scRNA <- readRDS("") #Available in zenodo
 codex <-  readRDS()#Available in zenodo
-#source("/omics/odcf/analysis/OE0285_projects/human-bone-marrow/Lymphoma/bd_rhapsody/2021_May/Analysis/Figures/Figure_config.R")
+source("/path/to/Figure_config.R")
 ```
 
 # Panels 

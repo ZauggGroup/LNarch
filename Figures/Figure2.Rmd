@@ -1,0 +1,261 @@
+---
+title: "Figure2"
+output: html_document
+date: "2024-02-29"
+---
+
+# Load pacakges
+```{r setup, include=FALSE}
+library(Seurat)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(tidyverse)
+library(org.Hs.eg.db)
+library(GO.db)
+library(ggpubr)
+library(biomaRt) #2.5 version necessary
+```
+
+# Load objects
+```{r setup, include=FALSE}
+scRNA <- readRDS("") #Available in zenodo
+codex <-  readRDS()#Available in zenodo
+out_dir <- "/g/scb2/zaugg/amathiou/2021July_LNS012/" #Needs to be defined
+source("/path/to/Figure_config.R")
+```
+
+# Panels 
+## A
+```{r  Panel A, fig.height=8, fig.width=8, fig.cap="UMAP of LN stronal cells of RNA sequencing data with differential abundand cells"}
+MSC <- subset(scRNA, subset=gate %in% c("MSC", "DN", "BEC", "LEC"))B 
+DimPlot(subset(MSC, group %in% c("FL", "rLN")), reduction = "UMAP_new",
+        group.by = "DA_cluster", cols = c("grey80", "dodgerblue4","dodgerblue4", "dodgerblue4", "dodgerblue4"), order = T)
+DimPlot(subset(MSC, group %in% c("DLBCL", "rLN")), reduction = "UMAP_new",
+        group.by = "DA_cluster", cols = c("grey80", "olivedrab4", "olivedrab4", "olivedrab4", "olivedrab4"), order = T)
+
+Fl <- subset(MSC, group %in% c("FL", "rLN"))
+DLBCL <- subset(MSC, group %in% c("DLBCL", "rLN"))
+data <- Embeddings(object = Fl[["UMAP_new"]])[(colnames(Fl)), c(1, 2)]
+data <- as.data.frame(data)
+data$Type_binned <- Fl$group
+data$patient <- Fl$patient
+data$DASeq <- as.character(Fl$DA_cluster)
+
+p1 <- ggplot(data,aes(UMAP_1, UMAP_2)) + 
+  ggforce::geom_voronoi_tile(aes(fill = DASeq, group = -1L), max.radius =0.05) +
+  theme_void()+
+  scale_fill_manual(values= c("grey70", "dodgerblue4","dodgerblue4", "dodgerblue4", "dodgerblue4")) +
+  NoLegend()
+
+data <- Embeddings(object = DLBCL[["UMAP_new"]])[(colnames(DLBCL)), c(1, 2)]
+data <- as.data.frame(data)
+data$Type_binned <- DLBCL$group
+data$patient <- DLBCL$patient
+data$DASeq <- as.character(DLBCL$DA_cluster)
+
+p2 <- ggplot(data,aes(UMAP_1, UMAP_2)) + 
+  ggforce::geom_voronoi_tile(aes(fill = DASeq, group = -1L), max.radius =0.05) +
+  theme_void()+
+  scale_fill_manual(values= c("grey70", "olivedrab4","olivedrab4","olivedrab4","olivedrab4")) +
+  NoLegend()
+
+p1|p2
+```
+
+## B
+```{r Panel B left, fig.height=3, fig.width=6, fig.cap="Box plot of remodeled cells"}
+MSC$lnsc_cluster <- ifelse(MSC$gate %in% c("MSC", "DN"), "FRC", MSC$gate)
+data <- subset(MSC@meta.data, subset=group %in% c("DLBCL", "FL")) %>% 
+  group_by(patient, group, lnsc_cluster) %>% count(DA_annotation)
+frac <-  data %>%  summarise(frac= n/sum(n)) %>% dplyr::select("frac")
+data$frac <- frac$frac
+
+data %>% filter(DA_annotation %in% c("MSC NHL", "DN NHL", "BEC NHL", "LEC NHL")) %>% ungroup() %>% 
+  group_by(lnsc_cluster) %>% 
+  rstatix::wilcox_test(frac~group, p.adjust.method = "BH")
+
+data %>% filter(DA_annotation %in% c("MSC NHL", "DN NHL", "BEC NHL", "LEC NHL")) %>%
+  ggplot(aes(x = group, y=frac, color=group, fill=group, alpha=0.1)) + geom_boxplot()+
+  scale_color_manual(values = c("olivedrab4","dodgerblue4"))+
+  scale_fill_manual(values =  c("olivedrab4","dodgerblue4"), 0.2)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ 
+  xlab("Patients")+
+  ylab("counts")+
+  guides(fill=guide_legend(title="Remodeling"))+facet_wrap(~lnsc_cluster)
+```
+
+### C
+```{r Panel C, fig.height=3, fig.width=6}
+#Differential expression analysis
+#Perform DE analysis between DLBCL and rLN
+dlbcl_rln_obj <- subset(scRNA, subset = group %in% c("rLN", "DLBCL"))
+DefaultAssay(dlbcl_rln_obj) <- "RNA"
+Idents(dlbcl_rln_obj) <- "lnsc_cluster"
+
+DE_genes <- list()
+DE_genes_entrez <- list()
+
+#I ran for all populations since these data are eventually used for supplemental figures
+for (j in c("FRC", "BEC", "LEC")){
+  jj <- str_replace(j, "/", "_")
+  tmp_obj <- subset(dlbcl_rln_obj, subset = lnsc_cluster == j)
+  Idents(tmp_obj) <- "group"
+  DE_all <- FindMarkers(tmp_obj, 
+                        ident.2 = "rLN", 
+                        ident.1 = "DLBCL", 
+                        pseudocount.use = 0.01, 
+                      test.use = "MAST", 
+                      only.pos = F, 
+                      logfc.threshold = 0,
+                      assay = "RNA")
+  write.table(DE_all, file=paste0(out_dir, jj,"_DEgenes_MAST_dlbclVSrln.tsv"), 
+              quote=FALSE, 
+              sep="\t", 
+              row.names = T)
+}
+#Specifically code for FRC
+de_frc_rln_dlbcl <- read.table(paste0(out_dir, "FRC_DEgenes_MAST_dlbclVSrln.tsv"))
+mt_genes <- grep("^MT-",rownames(de_frc_rln_dlbcl))
+rp_genes <- c(grep("^RPS",rownames(de_frc_rln_dlbcl)), 
+              grep("^RPL",rownames(de_frc_rln_dlbcl)))
+de_frc_rln_dlbcl <- de_frc_rln_dlbcl[-c(mt_genes, rp_genes), ]
+de_frc_rln_dlbcl$gene <- rownames(de_msc_pvc_rln_dlbcl)
+colnames(de_frc_rln_dlbcl) <- c("p_val", "log2FoldChange", "pct.1", "pct.2", "pvalue", "gene")
+```
+
+```{r Panel C, fig.width=3, fig.height=3}
+de_frc_rln_dlbcl$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange > 0.5 & de_msc_pvc_rln_dlbcl$pvalue < 10^-3] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange < -0.5 & de_msc_pvc_rln_dlbcl$pvalue < 10^-3] <- "DOWN"
+
+de_msc_pvc_rln_dlbcl$diffexpressed[de_msc_pvc_rln_dlbcl$gene %in% c("CXCL13", "CXCL12", "CCL21", "CCL19")] <- "DOWN"
+de_msc_pvc_rln_dlbcl$diffexpressed[de_msc_pvc_rln_dlbcl$gene %in% c("CXCL9", "CXCL10", "CXCL11")] <- "UP"
+
+`%!in%` = Negate(`%in%`)
+de_frc_rln_dlbcl$delabel <- NA
+de_frc_rln_dlbcl$delabel[de_frc_rln_dlbcl$diffexpressed %!in% c("NO", "DOWN")] <- de_frc_rln_dlbcl$gene[de_frc_rln_dlbcl$diffexpressed %!in% c("NO", "DOWN")]
+
+de_frc_rln_dlbcl$delabel <- ifelse(de_frc_rln_dlbcl$gene == "CXCL13"
+                                  | de_frc_rln_dlbcl$gene == "CXCL12"
+                                  | de_frc_rln_dlbcl$gene == "CCL21"
+                                  | de_frc_rln_dlbcl$gene == "CCL19"
+                                  | de_frc_rln_dlbcl$gene == "CXCL9"
+                                  | de_frc_rln_dlbcl$gene == "CXCL10"
+                                  | de_frc_rln_dlbcl$gene == "CXCL11",T, F)
+
+ggplot(data=de_frc_rln_dlbcl, aes(x=log2FoldChange, y=-log10(pvalue), col=diffexpressed)) + 
+  geom_point(alpha = 0.6, size = 1.5) + 
+  ggrepel::geom_text_repel(data = de_frc_rln_dlbcl, 
+                           aes(label = ifelse(delabel == TRUE, 
+                                     as.character(gene),"")), 
+                           box.padding = 0.5, 
+                           max.overlaps = Inf,
+                           min.segment.length = 0,
+                           hjust= 0.3,
+                           colour = "black")+
+  #geom_label_repel(aes(label = gene),
+  #                 box.padding   = 1)+
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = 2)+
+  labs(x ="log2(FC)", y = "-log10(p.adj)")+
+  theme_bw() +
+  theme(text = element_text(size=11), 
+        axis.text.y = element_text(size = 11, color = "black"),
+        axis.text.x = element_text(size = 11, color = "black"),
+        legend.title = element_blank(),
+        plot.title = element_text("tipBEC vs. other BEC"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        aspect.ratio = 1,
+        legend.position="none") +
+  scale_color_manual(values=c("#8D60B5", "#D3D3D3", "#67B86E"))
+```
+
+## D
+```{r Panel D}
+loeffler <- readRDS("/omics/odcf/analysis/OE0285_projects/human-bone-marrow/Lymphoma/bd_rhapsody/2021_May/Analysis/Demultiplexing/LN_paper_data/LoefflerWirth/survival_data/extendend_for_disease_subtypes.rds") #Data available upon request
+loeffler_geneIDs <- getBM(attributes = c("affy_hg_u133_plus_2","hgnc_symbol","chromosome_name","start_position","end_position","band"), 
+      values = str_replace_all(rownames(loeffler), pattern = "-", "_"), 
+      filters = "affy_hg_u133_plus_2", 
+      mart=useMart(biomart="ensembl", 
+                   dataset="hsapiens_gene_ensembl"))
+chemokines_homostatic <- c("CXCL12", "CCL21", "CXCL13", "CCL19")
+chemokines_ifn <- c("CXCL9", "CXCL10", "CXCL11")
+
+chemokines_homostatic <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_homostatic], "_", "-")
+chemokines_ifn <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_ifn], "_", "-")
+
+loeffler$mean_homostatic  <- colMeans(loeffler@assays$RNA@data[chemokines_homostatic,])
+loeffler$mean_ifn <- colMeans(loeffler@assays$RNA@data[chemokines_ifn,])
+
+loeffler$Type <- loeffler$diagnosis
+loeffler$Type[loeffler$diagnosis %in% c("DLBCL ABC","DLBCL Double-Hit", "DLBCL GCB", "DLBCL unclassified")] <- "DLBCL"
+loeffler$Type[loeffler$diagnosis %in% c("FL BCL2-break NA","FL BCL2-break neg", "FL BCL2-break pos")] <- "FL"
+loeffler$Type[loeffler$diagnosis %in% c("tonsil")] <- "control"
+
+p1 <- loeffler@meta.data %>% filter(Type %in% c("control", "FL", "DLBCL")) %>% 
+  ggboxplot(x="Type", y="mean_homostatic", fill="Type", outlier.shape = NA, 
+                                       order = c("control", "FL", "DLBCL"))+
+  ggbeeswarm::geom_beeswarm(aes(x = Type,y = mean_homostatic, fill=Type),
+                            size = 1, alpha = 0.3, priority='density', cex = 1.3)+
+  ggpubr::stat_compare_means(method = "t.test", label = "p.signif",  p.adjust.method = "BH",
+                     comparisons = list(c("FL", "DLBCL"), 
+                                        c("FL", "control"), 
+                                        c("DLBCL", "control")))+
+  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E" ))+
+  xlab("")+
+  ylab("Mean gene expression")+
+  theme_bw()+
+    theme(
+      plot.title = element_text(size = 13, face = "bold"),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(color = "black"), 
+      aspect.ratio=1,
+      legend.position="none",
+      axis.text.y = element_text(size = 11, color = "black"),
+      axis.text.x = element_text(size = 11, color = "black"),
+      axis.title.x = element_text(size = 13, color = "black", vjust = 1),
+      axis.title.y = element_text(size = 13, color = "black", vjust = 1))+
+  ggtitle("Structural chemokines")
+
+
+p2 <- loeffler@meta.data %>% filter(Type %in% c("control", "FL", "DLBCL")) %>% 
+  ggboxplot(x="Type", y="mean_ifn", fill="Type", outlier.shape = NA, 
+                                       order = c("control", "FL", "DLBCL")) +
+  ggbeeswarm::geom_beeswarm(aes(x = Type,y = mean_ifn, fill=Type),
+                            size = 1, alpha = 0.3, priority='density', cex = 1.3)+
+  ggpubr::stat_compare_means(method = "t.test", label = "p.signif",
+                     comparisons = list(c("FL", "DLBCL"), 
+                                        c("FL", "control"), 
+                                        c("DLBCL", "control")))+
+  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E" ))+
+  xlab("")+
+  ylab("Mean gene expression")+
+  theme_bw()+
+    theme(
+      plot.title = element_text(size = 13, face = "bold"),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(color = "black"), 
+      aspect.ratio=1,
+      legend.position="none",
+      axis.text.y = element_text(size = 11, color = "black"),
+      axis.text.x = element_text(size = 11, color = "black"),
+      axis.title.x = element_text(size = 13, color = "black", vjust = 1),
+      axis.title.y = element_text(size = 13, color = "black", vjust = 1))+
+  ggtitle("Inflammatory chemokines")
+
+p1+p2
+```
+
+```{r Panel I}
+## Object also used for TCR clonal expansion analysis in Figure 3
+## Dataset from Roider et al 2024 (Nat Cell Bio)
+## 5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
+## Note that here we only focused on rLN, DLBCL and FL
+```

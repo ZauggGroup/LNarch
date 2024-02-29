@@ -1,0 +1,280 @@
+---
+title: "Figure5"
+output: html_document
+date: "2024-02-29"
+---
+
+# Load packages
+```{r setup, include=FALSE}
+library(Seurat)
+library(data.table)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(tidyverse)
+library(org.Hs.eg.db)
+library(GO.db)
+library(biomaRt) #2.5 version necessary
+library(maxstat)
+library(survival)
+library(survminer)
+library(forestmodel)
+library(forestplot)
+```
+
+# Load objects
+The required objects are the  are publicly available except for the survival data of the Löffler-Wirth er al., 2019 data (plase get in contact with the corrosponding authors of the manuscript if interested in using the data). For the remaining data, olease use the following links to download the objects:
+
+- Chapuy et al. 2018: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE98588
+- Schmitz et al., 2018: https://gdc.cancer.gov/about-data/publications/DLBCL-2018
+- Löffler-Wirth et al., 2019: https://www.health-atlas.de/data_files/21
+
+We generated from those raw data Seurat objects, which were used throughout the script.
+
+```{r setup, include=FALSE}
+loeffler <- readRDS("/omics/odcf/analysis/OE0285_projects/human-bone-marrow/Lymphoma/bd_rhapsody/2021_May/Analysis/Demultiplexing/LN_paper_data/LoefflerWirth/survival_data/extendend_for_disease_subtypes.rds") #Data available upon request
+```
+
+# Function for pie chart
+This custom made function allows to calculate the distribution of neighborhood labels for each sample.
+```{r}
+get_heter_neighboors_easy <- function(
+    object,
+    k=10,
+    inReduct="pca",
+    inDims=7){
+  dist.input <- Seurat::Embeddings(object, 
+                                   reduction = inReduct)[,1:inDims]
+  get_knn <- FNN::get.knn(data=dist.input, k=k, algorithm = "kd_tree")
+  rownames(get_knn$nn.index) <- colnames(object)
+  hom_list <- lapply(seq(1:dim(get_knn$nn.index)[1]), function(i){table(object$Type[get_knn$nn.index[i,]])})
+  class_names <-  c("DLBCL","FL", "FL/DLBCL", "control")
+  hom_list_2 <- lapply(hom_list, function(j){
+    if(length(j) < 4){ #4
+      name <- class_names[!class_names %in% names(j)]
+      for(k in seq(1:length(name))){
+        j[[name[k]]] <- 0
+        j <- j[order(names(j), decreasing = F)]
+      }
+    }
+    return(j)
+  })
+  hom_df <- as.data.frame(do.call(rbind, hom_list_2))
+  rownames(hom_df) <- colnames(object)
+  hom_df$Type <- as.character(object$Type)
+ 
+  mean_per_group <- aggregate(hom_df[, 1:4], list(hom_df$Type), sum)
+
+  hom <- unlist(hom_list_2)
+  return(list(hom_df=hom_df,
+              hom=hom, 
+              summary=mean_per_group))
+}
+
+```
+
+# Panels
+## A
+```{r}
+# Match microarray probes with genes
+loeffler_geneIDs <- getBM(attributes = c("affy_hg_u133_plus_2","hgnc_symbol","chromosome_name","start_position","end_position","band"), 
+      values = str_replace_all(rownames(loeffler), pattern = "-", "_"), 
+      filters = "affy_hg_u133_plus_2", 
+      mart=useMart(biomart="ensembl", 
+                   dataset="hsapiens_gene_ensembl"))
+
+chemokines_homostatic <- c("CXCL12", "CCL21", "CXCL13", "CCL19")
+chemokines_ifn <- c("CXCL9", "CXCL10", "CXCL11")
+
+chemokines_homostatic <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_homostatic], "_", "-")
+chemokines_ifn <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_ifn], "_", "-")
+
+# Subset all probes to the ones matching the homeostatic and inflammatory chemokines
+loeffler <- subset(loeffler, subset=Type %in% c("BL", "intermediate"), invert=T)
+loeffler_chemo <- subset(loeffler, 
+                         features =  str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% c(chemokines_homostatic, chemokines_ifn)], "_", "-"))
+
+# Calulate new UMAP embeddings
+loeffler_chemo <- loeffler_chemo %>% FindVariableFeatures() %>% ScaleData() %>% 
+  RunPCA(dims = 1:8) %>% 
+  FindNeighbors(dims = 1:7) %>% 
+  RunUMAP(dims = 1:7)
+  
+loeffler_chemo <- FindClusters(loeffler_chemo, resolution = c(0.7, 0.8, 0.9, 1, 1.5))
+
+loeffler_chemo$Type <- loeffler_chemo$Type
+loeffler_chemo$Type[loeffler_chemo$Type %in% c("DLBCL ABC","DLBCL Double-Hit", "DLBCL GCB", "DLBCL unclassified")] <- "DLBCL"
+loeffler_chemo$Type[loeffler_chemo$Type %in% c("FL BCL2-break NA","FL BCL2-break neg", "FL BCL2-break pos")] <- "FL"
+loeffler_chemo$Type[loeffler_chemo$Type %in% c("normal control","tonsil")] <- "control"
+
+# Normal UMAP
+DimPlot(loeffler_chemo, group.by = "Type", cols = pals::tol(5))+ggtitle("Chemokines")
+
+#Add the pie-charts into the UMAP
+homFL <- get_heter_neighboors_easy(loeffler_chemo, inDims = 7, k=20)
+home_list <- split(homFL$hom, f=names(homFL$hom))
+
+data <- data.frame(loeffler_chemo@reductions$umap@cell.embeddings,
+  Type=loeffler_chemo@meta.data$Type,
+  FL=home_list$FL, DLBCL=home_list$DLBCL,
+  control=home_list$control, FLDLBCL=home_list$`FL/DLBCL`)
+
+ggplot() + 
+  scatterpie::geom_scatterpie(aes(x=UMAP_1, y=UMAP_2, group=Type), data=data,
+                              cols=c("control", "FL", "DLBCL", "FLDLBCL"), color="gray30"
+  ) + 
+  coord_equal() + scale_fill_manual(values = c("#8D60B5","#8BAAE0", "#67B86E", "#90D4CE" ), name="Disease type")+
+  xlab("UMAP 1")+
+  ylab("UMAP 2")+
+  theme_bw()+
+  theme(
+    plot.title = element_text(size = 13, face = "bold"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(color = "black"), 
+    aspect.ratio=1,
+    #legend.position="none",
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.text.x = element_text(size = 13, color = "black"),
+    axis.title.x = element_text(size = 13, color = "black", vjust = 1),
+    axis.title.y = element_text(size = 13, color = "black", vjust = 1)) + scale_x_reverse()
+```
+
+## B 
+```{r}
+data$ifn <- loeffler_chemo$mean_infl
+data$homostatic <- loeffler_chemo$mean_org
+ggplot() + 
+  geom_point(aes(x=UMAP_1, y=UMAP_2, color=ifn), data=data) + 
+  coord_equal() + scale_colour_gradientn(colors = pals::parula(n=100), name="Ifn")+
+  xlab("UMAP 1")+
+  ylab("UMAP 2")+
+  theme_void() + scale_x_reverse()+
+
+ggplot() + 
+  geom_point(aes(x=UMAP_1, y=UMAP_2, color=homostatic), data=data) + 
+  coord_equal() + scale_colour_gradientn(colors = pals::parula(n=100), name="Homostatic")+
+  xlab("UMAP 1")+
+  ylab("UMAP 2")+
+  theme_void() + scale_x_reverse()
+
+```
+
+
+## C
+```{r}
+###########################
+# Chapuy Overall Survival #
+###########################
+
+chapuy_obj <- readRDS("/path/to/file/chapuy.rds")
+
+chapuy_obj$Mean_expression_Orga <- colMeans(chapuy_obj@assays$RNA@counts[rownames(chapuy_obj@assays$RNA@counts) %in% 
+                                                                     c("CXCL13", "CCL21", "CCL19"),])
+chapuy_obj$Mean_expression_IFN <- colMeans(chapuy_obj@assays$RNA@counts[rownames(chapuy_obj@assays$RNA@counts) %in% 
+                                                                      c("CXCL9", "CXCL10", "CXCL11"),])
+data_chapuy_OS <- chapuy_obj@meta.data[!is.na(chapuy_obj@meta.data$OS),] %>% 
+  dplyr::select(c(PFS, PFS_STAT, OS, OS_STAT, Mean_expression_Orga, Mean_expression_IFN))
+
+data_chapuy_OS$OS <- as.numeric(as.character(data_chapuy_OS$OS))
+data_chapuy_OS$OS_STAT <- as.numeric(as.character(data_chapuy_OS$OS_STAT))
+data_chapuy_OS <- data_chapuy_OS[!is.na(data_chapuy_OS$OS),]
+
+surv_rnaseq.cut_OS <- surv_cutpoint(
+   data_chapuy_OS,
+   time = "OS",
+   event = "OS_STAT",
+   variables = c("Mean_expression_Orga", "Mean_expression_IFN"))
+
+surv_rnaseq.cat_OS <- surv_categorize(surv_rnaseq.cut_OS) 
+
+plot(surv_rnaseq.cut_OS, "Mean_expression_Orga")
+fit <- survfit(Surv(OS, OS_STAT) ~ Mean_expression_Orga,
+                 data = surv_rnaseq.cat_OS)
+chapuy_orga_os <- ggsurvplot(fit, data = surv_rnaseq.cat_OS, 
+                             xlab = "Overall Survival [Month]",
+                             risk.table = T, pval = T, 
+                             palette  = c("#FBB040", "#247FBC"))
+
+
+## Forest plot
+data_chapuy_OS$Mean_expression_Orga_cat <- surv_rnaseq.cat_OS$Mean_expression_Orga
+data_chapuy_OS_sub <- data_chapuy_OS[data_chapuy_OS$Mean_expression_Orga_cat=="high",]
+
+cox_model_chapuy_cat_Orga_os <- coxph(Surv(OS, OS_STAT) ~ Mean_expression_Orga_cat, data = data_chapuy_OS)
+print(forest_model(cox_model_chapuy_cat_Orga_os, factor_separate_line  = T, limits = c(log(0.7), log(5))))
+
+surv_rnaseq.cat_OS$score_orga <- data_chapuy_OS$Mean_expression_Orga
+surv_rnaseq.cat_OS$cohort <- "Chapuy"
+
+## Dotplot
+p_os <- surv_rnaseq.cat_OS %>% data.frame() %>% dplyr::select(cohort, Mean_expression_Orga, score_orga) %>% 
+  ggplot(aes(cohort, score_orga, color=Mean_expression_Orga))+
+    geom_jitter()+
+    scale_color_manual(values = c("#FBB040", "#247FBC"))+
+    geom_hline(yintercept=surv_rnaseq.cut_OS$cutpoint[1,1])+xlab("")+ylab("Overall_survival")
+
+
+############################
+# Schmitz Overall Survival #
+############################
+schmitz_obj <- readRDS("/path/to/file/schmitz.rds")
+
+schmitz_obj$Mean_expression_Orga <- colMeans(schmitz_obj@assays$RNA@counts[rownames(schmitz_obj@assays$RNA@counts) %in% 
+                                                                     c("CXCL13", "CXCL12", "CCL21", "CCL19"),])
+schmitz_obj$Mean_expression_IFN <- colMeans(schmitz_obj@assays$RNA@counts[rownames(schmitz_obj@assays$RNA@counts) %in% 
+                                                                      c("CXCL9", "CXCL10", "CXCL11"),])
+
+data_schmitz <- schmitz_obj@meta.data[schmitz_obj@meta.data$`Included in Survival Analysis`=="Yes",] %>% 
+                                                  dplyr::select(c(`Progression_Free Survival _PFS_ Status_ 0 No Progressoin_ 1 Progression`, `Progression_Free Survival _PFS_ Time _yrs`,
+                                                  `Status at Follow_up_ 0 Alive_ 1 Dead`, `Follow_up Time _yrs`, Mean_expression_Orga, Mean_expression_IFN))
+
+colnames(data_schmitz)[1] <- "PFS_STAT"
+colnames(data_schmitz)[2] <- "PFS"
+colnames(data_schmitz)[3] <- "OS_STAT"
+colnames(data_schmitz)[4] <- "OS"
+
+data_schmitz_OS <- data_schmitz
+data_schmitz_OS$OS <- as.numeric(as.character(gsub(",", ".",data_schmitz_OS$OS)))
+data_schmitz_OS$OS_STAT <- as.numeric(as.character(data_schmitz_OS$OS_STAT))
+data_schmitz_OS <- data_schmitz_OS[!is.na(data_schmitz_OS$OS),]
+
+surv_rnaseq.cut_OS <- surv_cutpoint(
+   data_schmitz_OS,
+   time = "OS",
+   event = "OS_STAT",
+   variables = c("Mean_expression_Orga", "Mean_expression_IFN"))
+
+surv_rnaseq.cat_OS <- surv_categorize(surv_rnaseq.cut_OS) 
+
+plot(surv_rnaseq.cut_OS, "Mean_expression_Orga")
+fit <- survfit(Surv(OS, OS_STAT) ~ Mean_expression_Orga,
+                 data = surv_rnaseq.cat_OS)
+schmitz_orga_os <- ggsurvplot(fit, data = surv_rnaseq.cat_OS, xlab = "Overall Survival [years]", risk.table = T, pval = T, palette  = c("#FBB040", "#247FBC"))
+
+cox_model <- coxph(Surv(OS, OS_STAT) ~ Mean_expression_Orga, 
+                data = data_schmitz_OS)
+
+
+# Forest plot
+data_schmitz_OS$Mean_expression_Orga_cat <- surv_rnaseq.cat_OS$Mean_expression_Orga
+data_schmitz_OS$Mean_expression_IFN_cat <- surv_rnaseq.cat_OS$Mean_expression_IFN
+
+cox_model_schmitz_cat_Orga_os <- coxph(Surv(OS, OS_STAT) ~ Mean_expression_Orga_cat,data = data_schmitz_OS)
+print(forest_model(cox_model_schmitz_cat_Orga_os,factor_separate_line  = T, limits = c(log(0.7), log(5))))
+
+cox_model_schmitz_cat_IFN_os <- coxph(Surv(OS, OS_STAT) ~ Mean_expression_IFN_cat, data = data_schmitz_OS)
+print(forest_model(cox_model_schmitz_cat_IFN_os))
+
+surv_rnaseq.cat_OS$score_orga <- data_schmitz_OS$Mean_expression_Orga
+surv_rnaseq.cat_OS$cohort <- "Schmitz"
+
+## Dotplot
+p_os <- surv_rnaseq.cat_OS %>% data.frame() %>% dplyr::select(cohort, Mean_expression_Orga, score_orga) %>% 
+  ggplot(aes(cohort, score_orga, color=Mean_expression_Orga))+
+    geom_jitter()+
+    scale_color_manual(values = c("#FBB040", "#247FBC"))+
+    theme_figures+geom_hline(yintercept=surv_rnaseq.cut_PFS$cutpoint[1,1])+xlab("")+ylab("Overall_survival")
+
+```
