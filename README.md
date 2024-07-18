@@ -5,7 +5,10 @@ Repository for Manuscript in revision with title:
 
 Contributors: Felix Czernilofsky, Lea Jopp-Saile, Anna Mathioudaki
 
-## Data access
+## Guide for code access
+All code used in the manuscript can be accessed and cloned via the present repository  
+
+## Data access and runs on manuscript data
 Objects available in Zenodo.
 Raw data have been deposited in EGA.  
 Links will be made public upon acceptance.  
