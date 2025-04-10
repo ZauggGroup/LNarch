@@ -341,7 +341,7 @@ ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) +
   scale_fill_manual(values = c("lightgrey", "#B13A2C")) + stat_compare_means()
 dev.off()
 
-pdf("/g/scb2/zaugg/amathiou/2021July_LNS012/10.TCRseq/Figure3_G_Barplot_alternative.pdf", width = 3, height = 3)
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot_alternative.pdf", width = 3, height = 3)
 ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=rev(c("rLN", "FL", "DLBCL")))), 
        aes(x = Expanded, y = Freq, fill = Entity, label=Freq)) + 
   geom_bar(stat = "identity", position = "fill") + 
@@ -349,7 +349,7 @@ ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=rev(c("rLN", "FL
   scale_fill_manual(values = c("#67B86E", "#8BCDE0", "#8D60B5"))
 dev.off()
 
-pdf("/g/scb2/zaugg/amathiou/2021July_LNS012/10.TCRseq/Figure3_G_Barplot.pdf", width = 3, height = 3)
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot.pdf", width = 3, height = 3)
 ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL"))), 
        aes(y = Freq, x = Entity, label=Freq, color = Expanded, fill = Expanded)) + 
   geom_bar(stat = "identity", position = "fill", alpha = 0.5) + 
