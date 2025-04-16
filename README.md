@@ -15,7 +15,9 @@ Links will be made public upon acceptance.
 
 ## Packages versions
 #### Fastq preprocessing of scRNA-seq data
-BD Rhapsody Docker image version 1.9 (https://hub.docker.com/u/bdgenomics)  
+- BD Rhapsody Docker image version 1.9 (https://hub.docker.com/u/bdgenomics)  
+- cellranger version 8.0.1  
+
 #### Downstream scRNA-seq analysis:
 Python v3.9  
 Scikit-learn v.1.3.2  
