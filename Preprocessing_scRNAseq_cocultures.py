@@ -7,17 +7,17 @@ import glob
 import shutil
 
 # Paths
-input_tsv = "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_LNS019_scRNAseq/data/42585_meta.tsv"
-output_base = "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_LNS019_scRNAseq/202503_CellRanger_logs"
-fastq_base = "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_LNS019_scRNAseq/data/250305_A01382_0631_AH2MHTDSXF"
-feature_ref = "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_LNS019_scRNAseq/hashing_3prime.csv"
-transcriptome = "/omics/groups/OE0606/internal/amathiou/refdata/refdata-gex-GRCh38-2024-A"
+input_tsv = "/LNStroma/202503_LNS019_scRNAseq/data/42585_meta.tsv"
+output_base = "/LNStroma/202503_LNS019_scRNAseq/202503_CellRanger_logs"
+fastq_base = "/LNStroma/202503_LNS019_scRNAseq/data/250305_A01382_0631_AH2MHTDSXF"
+feature_ref = "/LNStroma/202503_LNS019_scRNAseq/hashing_3prime.csv"
+transcriptome = "/refdata/refdata-gex-GRCh38-2024-A"
 
 #Read metadata file
 df = pd.read_csv(input_tsv, sep="\t")
 
 #Define samples
-samples = ['S1', 'S2', 'S3', 'S4']
+samples = ['S1', 'S2', 'S3']
 
 for sample in samples:
     sample_df = df[(df["SAMPLE_NAME"] == sample) | (df["SAMPLE_NAME"] == f"Hash {sample}")]
