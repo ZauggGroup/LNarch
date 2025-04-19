@@ -4,8 +4,6 @@ output: html_document
 date: "2025-03-27"
 ---
 
-#Updated code for scTCR analysis based on reviewer #1 comment regarding including all samples from Roider et al 2024
-#Information about these samples can be found in STable1 in the original publication
 ```{r}
 library(Seurat)
 library(dplyr)
@@ -14,46 +12,13 @@ library(data.table)
 library(ggplot2)
 library(ggrastr)
 library(ggpubr)
+library(pals)
+library(scCustomize)
+#library(data.table)
+library(RColorBrewer)
 ```
 
-```{r}
-colors_umap_cl <- 
-  c("1"=brewer.pal(9, "Purples")[4],
-    "2"=brewer.pal(9, "Purples")[6],
-    "3"=brewer.pal(9, "YlOrRd")[4],
-    #"4"=brewer.pal(9, "YlOrRd")[8],
-    "5"=brewer.pal(9, "YlOrRd")[7],
-    "6"=brewer.pal(9, "Greens")[6],
-    "8"=brewer.pal(9, "Blues")[3],
-    "9"=brewer.pal(9, "Purples")[8],
-    #"10"=brewer.pal(9, "YlOrRd")[5],
-    "11"=brewer.pal(9, "Blues")[9],
-    "12"=brewer.pal(9, "YlOrRd")[3],
-    "13"=brewer.pal(9, "Blues")[5],
-    "14"=brewer.pal(9, "RdPu")[7],
-    "15"=brewer.pal(9, "Blues")[7],
-    "16"=brewer.pal(9, "YlOrRd")[6],
-    "18"=brewer.pal(9, "YlOrRd")[9],
-    "19"=brewer.pal(9, "Greys")[4]
-  )
-
-mytheme_1 <- theme_bw()+
-  theme(axis.title = element_text(size=10, color="black"),
-        axis.text = element_text(size=10, color="black"),
-        legend.position = "none",
-        legend.text = element_text(size = 8, color="black"),
-        legend.title = element_text(size = 10, color="black"),
-        legend.key.width = unit(0.5, "cm"),
-        plot.title = element_text(hjust = 0.5, size = 10, color="black", face = "bold"),
-        panel.border = element_rect(size=0.25),
-        strip.background = element_rect(fill="white", size=0.5),
-        strip.text = element_text(size=6.5, color="black"),
-        panel.grid = element_blank()
-        )
-```
-
-
-```{r}
+```{r, Surat process function}
 SeuratProc_T <- function(sobj, verbose=FALSE, dims.clustering=NULL, resolution.clustering=NULL, dims.umap=NULL) {
   sobj <- DietSeurat(sobj)
   DefaultAssay(sobj) <- "RNA"
@@ -76,10 +41,8 @@ sample_list <- c("LN0132", "LN0144", "LN0178", "LN0193", "LN0198",
 dir_path <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/"
 contig_path <- file.path(dir_path, "contig_files")
 
-Combined_T <- readRDS(file.path(dir_path, "Tcells_Integrated.rds"))
-```
+Combined_T <- readRDS(file.path(dir_path, "20220901_cd8_citeseq_subclustering.rds"))
 
-```{r}
 sobjs_T <- lapply(sample_list, 
                   function(sample_id) {
   print(paste0('Reading in sample: ', sample_id))
@@ -96,55 +59,126 @@ sobjs_T <- lapply(sample_list,
   return(sobj)
 })
 names(sobjs_T) <- sample_list
-saveRDS(sobjs_T, file.path(dir_path, "sobjs_Tmapped.rds"))
+#saveRDS(sobjs_T, file.path(dir_path, "sobjs_Tmapped.rds"))
+```
+
+```{r, merge the list of objects}
+dir_path <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/"
+sobjs_T <- readRDS(file.path(dir_path, "sobjs_Tmapped.rds"))
+
+sobj <- Merge_Seurat_List(sobjs_T[sample_list])
+rm(Combined_T)
+rm(sobjs_T)
+DefaultAssay(sobj) <- "RNA"
+sobj <- FindVariableFeatures(sobj, selection.method = "vst", nfeatures = 2000, verbose=T)
+
+sobj <- ScaleData(sobj, verbose=T)
+# Assess cell cycle
+sobj <- CellCycleScoring(sobj, s.features = cc.genes$s.genes, g2m.features = cc.genes$g2m.genes, set.ident = TRUE)
+sobj <- ScaleData(sobj, vars.to.regress = c("S.Score", "G2M.Score", "percent.mt"), verbose=T)
+# Run PCA
+sobj <- RunPCA(sobj, features = VariableFeatures(sobj), nfeatures.print=5, ndims.print=1:2,
+               reduction.name = "pcaRNA", reduction.key = "pcaRNA_")
+# Run clustering based on transcriptome
+sobj <- FindNeighbors(sobj, verbose=T, reduction = "pcaRNA")
+# Run UMAP based on transcriptome
+sobj <- RunUMAP(sobj, dims = 1:13, 
+                verbose=T, 
+                reduction.key = "umapRNA_",
+                reduction.name = "umapRNA", 
+                reduction = "pcaRNA")
+#saveRDS(sobj, file = '/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/sobs_scaled.rds')
+```
+
+
+```{r}
+sobj <- readRDS('/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/sobs_scaled.rds')
+cd8em <- readRDS(file.path(dir_path, "20220901_cd8_citeseq_subclustering.rds"))#this was combined_T
+```
+
+
+```{r}
+all_genes <- rownames(cd8em)
+noise_genes <- all_genes[c(grep("^RPS", all_genes), grep("^RPL", all_genes), grep("^MT-", all_genes), 
+                           grep("^AC0", all_genes), grep("^AL0", all_genes), grep("^AC1", all_genes), 
+                           grep("^AP0", all_genes), grep("^LINC", all_genes), grep("^AL([0-9]+)", all_genes), 
+                           grep("^BX([0-9]+)", all_genes), grep("^C([0-9]+)", all_genes), grep("orf", all_genes))]
+DefaultAssay(cd8em) <- "RNA"
+cd8em <- SCTransform(cd8em, vars.to.regress = "percent.mt", verbose = T)
+DefaultAssay(cd8em) <- "integratedRNA"
+cd8em <- FindVariableFeatures(cd8em)
+cd8em <- RunPCA(object = cd8em, verbose = FALSE, features = setdiff(VariableFeatures(object = cd8em), noise_genes))
+cd8em <- RunUMAP(object = cd8em, reduction = "pca", dims = 1:50, return.model=TRUE) #, spread = 1, min.dist = 0.0000001, a = 0.12, b = 0.9
 ```
 
 ```{r}
-sobjs_T_mapped <- lapply(sobjs_T, function(sobj) {
-  anchors <- FindTransferAnchors(reference = Combined_T, query = sobj, reference.reduction = "pcaRNA")
-  sobj <- MapQuery(anchorset = anchors, reference = Combined_T, query = sobj,
-                   reduction.model = "wnn.umap",
-                   refdata = list(predicted.celltype = "IdentI"),
-                   reference.reduction = "pcaRNA")
-  return(sobj)
-})
-names(sobjs_T_mapped) <- sample_list
-
-saveRDS(sobjs_T_mapped, file.path(dir_path, "sobjs_Tmapped_2.rds"))
+cd8em@meta.data$CellType <- Idents(cd8em)
+DefaultAssay(cd8em) <- "integratedRNA"
+DefaultAssay(sobj) <- "RNA"
+anchors <- FindTransferAnchors(reference = cd8em,
+                               query = sobj, 
+                               reference.reduction = "pcaRNA")
+sobj <- MapQuery(anchorset = anchors, 
+                 reference = cd8em, 
+                 query = sobj, 
+                 reduction.model = "umap",
+                 refdata = list(celltype = "CellType"),
+                 reference.reduction = "pcaRNA")
 ```
 
 ```{r}
-readTCR <- function(files=NULL){
-  lapply(files, fread) %>% 
-    bind_rows() %>% 
-    as_tibble() %>% 
-    mutate(PatientID = sapply(strsplit(barcode, "_"), `[`, 2)) %>% 
-    rename(Barcode_full = barcode)
+saveRDS(sobj, file = '/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/sobs_scaled.rds')
+saveRDS(cd8em, file = '/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/cd8em_formapping.rds')
+```
+
+```{r, Read in objects}
+sobj <- readRDS("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/sobs_scaled.rds")
+```
+
+```{r, Read in objects}
+cd8em <- readRDS("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/cd8em_formapping.rds")
+```
+
+```{r, Define DF_TCRrep}
+#define the DF_TCRep part
+dir_path <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/"
+contig_path <- file.path(dir_path, "contig_files")
+
+readTCR <- function(files = NULL) {
+  if (is.null(files) || length(files) == 0) {
+    stop("No input files provided to readTCR()")
+  }
+
+  lapply(files, fread) %>%
+    bind_rows() %>%
+    as_tibble() %>%
+    mutate(
+      PatientID = sapply(strsplit(barcode, "_"), `[`, 2)
+    ) #%>%
+    #rename(Barcode_full = barcode)
 }
 
 tcr_files <- list.files(path = contig_path, pattern = "^filtered_contig_annotations_new_.*\\.csv$", full.names = TRUE) #From Roider et al 2024
+#subset for those that are here
+sample_list <- c("LN0132", "LN0144", "LN0178", "LN0193", "LN0198", 
+                 "LN0243", "LN0249", "LN0259", "LN0264", "LN0278", 
+                 "LN0417")
+tcr_files <- tcr_files[grepl(paste(sample_list, collapse = "|"), tcr_files)]
+```
+
+```{r, Define DF_TCRrep}
 DF_TCRrep <- readTCR(tcr_files)
+DF_TCRrep$Barcode_full <- DF_TCRrep$barcode
+DF_TCRrep#105,706
+
+##### !!!!! ######
+#Subset the DF_TCRrep cause the contig folder has more files
+##### Keep only cells in ur object
+DF_TCRrep <- DF_TCRrep[which(DF_TCRrep$Barcode_full %in% sub("_", "", rownames(sobj@meta.data))), ]
+#DF_TCRrep #101,215
 ```
 
 ```{r}
-merged_meta <- map2_dfr(names(sobjs_T_mapped), sobjs_T_mapped, function(name, obj) {
-  data.frame(Barcode_full = rownames(obj@meta.data),
-             PatientID = name,
-             predicted.celltype = obj$predicted.predicted.celltype,
-             stringsAsFactors = FALSE)
-})
-
-merged_umap <- map2_dfr(names(sobjs_T_mapped), sobjs_T_mapped, function(name, obj) {
-  umap <- obj@reductions$ref.umap@cell.embeddings
-  umap_df <- as.data.frame(umap)
-  umap_df$Barcode_full <- rownames(umap)
-  umap_df
-})
-
-combined_meta <- merge(merged_meta, merged_umap, by = "Barcode_full")
-
-DF_TCRrep <- merge(DF_TCRrep, combined_meta, by = "Barcode_full")
-
 #Patient annotation
 entity_map <- tibble::tibble(
   PatientID = c("LN0132", "LN0144", "LN0178", "LN0193", "LN0198", 
@@ -152,17 +186,48 @@ entity_map <- tibble::tibble(
   Entity = c("rLN", "FL", "DLBCL", "DLBCL", "FL",
              "FL", "FL", "rLN", "rLN", "FL", "DLBCL")
 )
+
+merged_meta <- data.frame(
+  Barcode_full = rownames(sobj@meta.data),
+  PatientID = sobj@meta.data$PatientID,  # or sobj$sample, etc.
+  predicted.celltype = sobj$predicted.celltype,
+  stringsAsFactors = FALSE
+)
 ```
 
 ```{r}
+umap <- sobj@reductions$ref.umap@cell.embeddings
+umap_df <- as.data.frame(umap)
+umap_df$Barcode_full <- rownames(umap_df)
+combined_meta <- merge(merged_meta, umap_df, by = "Barcode_full")
+combined_meta$Barcode_full <- sub("_", "", combined_meta$Barcode_full)
+```
+
+```{r}
+# Merge with your TCR data
+DF_TCRrep <- merge(DF_TCRrep, 
+                   combined_meta, 
+                   by = "Barcode_full")
+```
+
+```{r}
+DF_TCRrep$PatientID.x <- NULL
+DF_TCRrep$PatientID <- DF_TCRrep$PatientID.y
+DF_TCRrep$PatientID.y <- NULL
 DF_TCRrep <- DF_TCRrep %>% 
   left_join(entity_map, by = "PatientID")
 ```
 
 ```{r}
+#Subset it to have only the EM cells
+DF_TCRrep <- DF_TCRrep[!DF_TCRrep$predicted.celltype %in% "T-CD8_Naive", ]
+```
+
+```{r}
 df_clonotypes <- DF_TCRrep %>% 
-  filter(!is.na(raw_clonotype_id), !is.na(Entity)) %>% 
-  select(Barcode_full, PatientID, raw_clonotype_id, refUMAP_1, refUMAP_2, predicted.celltype, Entity) %>% 
+  filter(!is.na(raw_clonotype_id)) %>% 
+  filter(!is.na(Entity)) %>% 
+  select(barcode, PatientID, raw_clonotype_id, refUMAP_1, refUMAP_2, predicted.celltype, Entity) %>% 
   distinct() %>% 
   add_count(PatientID, raw_clonotype_id, predicted.celltype) %>% 
   group_by(PatientID, raw_clonotype_id, predicted.celltype) %>% 
@@ -171,58 +236,146 @@ df_clonotypes <- DF_TCRrep %>%
             n = first(n),
             Entity = first(Entity),
             .groups = "drop") %>% 
-  mutate(n = ifelse(n > 50, 50, n)) %>% 
-  filter(predicted.celltype %in% c(3, 5, 16)) # CD8 EM types
+  mutate(n = ifelse(n > 50, 50, n))#clonotypes size maxes out at 50
+```
+
+###### UMAPs on EXPRESSION #####
+```{r}
+#cd8em <- readRDS(file.path(dir_path, "20220901_cd8_citeseq_subclustering.rds"))#this was combined_T
+all_genes <- rownames(cd8em)
+noise_genes <- all_genes[c(grep("^RPS", all_genes), grep("^RPL", all_genes), grep("^MT-", all_genes), 
+                           grep("^AC0", all_genes), grep("^AL0", all_genes), grep("^AC1", all_genes), 
+                           grep("^AP0", all_genes), grep("^LINC", all_genes), grep("^AL([0-9]+)", all_genes), 
+                           grep("^BX([0-9]+)", all_genes), grep("^C([0-9]+)", all_genes), grep("orf", all_genes))]
+DefaultAssay(cd8em) <- "RNA"
+cd8em <- SCTransform(cd8em, vars.to.regress = "percent.mt", verbose = T)
+DefaultAssay(cd8em) <- "integratedRNA"
+cd8em <- FindVariableFeatures(cd8em)
+cd8em <- RunPCA(object = cd8em, verbose = FALSE, features = setdiff(VariableFeatures(object = cd8em), noise_genes))
+cd8em <- RunUMAP(object = cd8em, reduction = "pca", dims = 1:50, return.model=TRUE) #, spread = 1, min.dist = 0.0000001, a = 0.12, b = 0.9
 ```
 
 ```{r}
+DefaultAssay(cd8em) <- "RNA"
+cd8em <- AddMetaData(cd8em, metadata = FetchData(cd8em, vars = c("CXCL13")))
+
+cd8em <- AddMetaData(
+  cd8em,
+  metadata = Embeddings(cd8em, reduction = "umap")[, 1:2]
+)
+```
+
+#UMAP Figure 2 on citeseq data (CXCL13)
+```{r}
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/CXCL13_UMAP_CITEseqobj.pdf", width = 4.5, height = 3)
+ggplot(cd8em@meta.data %>%
+  arrange(CXCL13 >= 2), 
+       aes(x = umap_1, y = umap_2, color = CXCL13)) +
+  geom_point(size = 0.5, stroke=0) +
+  scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) + 
+  theme_classic()
+dev.off()
+```
+
+#UMAP Figure 3 on TCR data (IFNG)
+```{r}
+DefaultAssay(sobj) <- "RNA"
+sobj <- AddMetaData(sobj, metadata = FetchData(sobj, vars = c("IFNG")))
+
+sobj <- AddMetaData(
+  sobj,
+  metadata = Embeddings(sobj, reduction = "ref.umap")[, 1:2]
+)
+```
+
+```{r}
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/ifngumap_tcrobj.pdf", width = 4.5, height = 3)
+ggplot(sobj@meta.data, 
+       aes(x = refUMAP_1, y = refUMAP_2, color = IFNG)) +
+  geom_point(size = 1, stroke=0) +
+  scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) + 
+  theme_classic()
+dev.off()
+```
+
+#UMAP Figure 3 on TCR data - clone size
+```{r}
+#refUMAP has to end up in here
 DF_5prime_umap <- DF_TCRrep %>% 
   filter(!is.na(Entity)) %>%
-  dplyr::select(refUMAP_1, refUMAP_2, predicted.celltype, Entity, PatientID.x) %>% 
+  dplyr::select(refUMAP_1, refUMAP_2, predicted.celltype, Entity, PatientID) %>% 
   distinct() %>% 
   mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL")))
-
-DF_5prime_umap_cd8 <- DF_5prime_umap[which(DF_5prime_umap$predicted.celltype %in% c(3, 5, 16)), ]
+DF_5prime_umap_cd8 <- DF_5prime_umap
 ```
 
 ```{r}
-#Annotations not provided in the object, had to select based on Figure 1 in Roider et al 2024
-DefaultAssay(Combined_T) <- 'RNA'
-DimPlot(Combined_T, label = T, reduction = 'wnn.umap')
-```
+p1 <- ggplot() +
+  geom_point(data=DF_5prime_umap_cd8, aes(x=refUMAP_1, y=refUMAP_2), 
+             size=1, alpha=1, color = '#ECECEC', stroke = 0) +
+  geom_point(data=df_clonotypes %>% 
+               filter(n > 2), 
+             aes(x=refUMAP_1, y=refUMAP_2, size=n, color=Entity), shape=21, stroke=0.7, alpha=1) +
+  scale_color_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E", 'DLBCL, GCB'="#67B86E"), guide="none")+
+  scale_fill_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E", 'DLBCL, GCB'="#67B86E"), guide="none")+
+  scale_size_continuous(range=c(1, 10), 
+                        limits=c(3, 50), 
+                        breaks=c(5, 20, 35, 50),
+                        labels=c("5", "20", "35", "> 50"), 
+                        name = NULL)+
+  #facet_wrap(~Entity, nrow = 1)+
+  geom_text(data = df_clonotypes %>% dplyr::select(PatientID, Entity) %>% 
+              distinct() %>% 
+              add_count(Entity), aes(label = paste0("n = ", n)),
+            x = 9.65, y = -6.9, hjust=1, check_overlap = T, size=2.25)+
+  xlab("refUMAP-1")+
+  ylab("refUMAP-2")+
+  theme_classic() +
+  theme(legend.position = "right")
 
-```{r}
-DF_TCRrep_cd8 <- DF_TCRrep[which(DF_TCRrep$predicted.celltype %in% c(3, 5, 16)), ]#Annotations not provided in the object, had to select based on Figure 1 in Roider et al 2024
-clonotype_df <- as.data.frame.matrix(table(DF_TCRrep_cd8$raw_clonotype_id, DF_TCRrep_cd8$Entity))
-clonotype_freq <- as.data.frame(rowSums(clonotype_df))
-colnames(clonotype_freq) <- "Freq"
-
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelA_clonesize.pdf", width = 6, height = 4)
-ggplot(clonotype_freq, aes(x = log10(Freq) )) + 
-  geom_density() + 
-  theme_bw() + 
-  geom_vline(xintercept = log10(6), 
-             linetype="dashed", color = "#7F0000", size=1) +
-  xlab("log10(Freq_Clone)") + 
-  ggtitle("4,220 clonotypes")
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/202310_TCRseq_UMAP_allCD8.pdf", width = 5, height = 3)
+plot(p1)
 dev.off()
 ```
 
 ```{r}
+DF_TCRrep_cd8 <- DF_TCRrep
+
+clonotype_df <- as.data.frame.matrix(table(DF_TCRrep_cd8$raw_clonotype_id, DF_TCRrep_cd8$Entity))
+clonotype_freq <- as.data.frame(rowSums(clonotype_df))
+colnames(clonotype_freq) <- "Freq"
+```
+
+```{r}
+#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelA_clonesize_newER_threshold7_woNaive.pdf", width = 6, height = 4)
+ggplot(clonotype_freq, aes(x = log10(Freq) )) + 
+  geom_density() + 
+  theme_bw() + 
+  geom_vline(xintercept = log10(7), 
+             linetype="dashed", color = "#7F0000", size=1) +
+  xlab("log10(Freq_Clone)") + 
+  ggtitle("6,349 clonotypes")
+#dev.off()
+```
+
+```{r}
 #From seurat object extract cxcl13 and ifng expression
-df <- data.frame()
-df <- lapply(names(sobjs_T_mapped), function(sample){
-  as.data.frame(t(as.data.frame(sobjs_T_mapped[[sample]]@assays$RNA@data)[c("IFNG", "CXCL13", "CCR7", "CXCR3"), ]))
-})
-merged_exp <- df %>% map_df(bind_rows)
+merged_exp <- FetchData(sobj, vars = c('IFNG', 'CXCL13'))
 merged_exp$Barcode_full <- rownames(merged_exp)
+merged_exp$Barcode_full <- sub("^_", "", merged_exp$Barcode_full)
+```
+
+
+```{r}
 DF_TCRrep_cd8 <- merge(DF_TCRrep_cd8, merged_exp, by = "Barcode_full")
 
 df_clonotypes <- 
   DF_TCRrep_cd8 %>% 
   filter(!is.na(raw_clonotype_id)) %>% 
   filter(!is.na(Entity)) %>% 
-  mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL")))
+  mutate(Entity=factor(Entity, levels=c("rLN", 
+                                        "FL", 
+                                        "DLBCL")))
 ```
 
 ```{r}
@@ -236,10 +389,14 @@ clone_df$Freq <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id),
   nrow(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), ])
   }))
 
-clone_df$Expanded <- ifelse(clone_df$Freq > 6, 
+clone_df$Expanded <- ifelse(clone_df$Freq > 7, 
                             "Expanded", 
                             "Non-expanded")
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelB_clonesize_ifng_correlation.pdf", width = 6, height = 4)
+```
+
+
+```{r}
+#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelB_clonesize_ifng_correlation_threshold7_woNaive.pdf", width = 6, height = 4)
 
 ggplot(clone_df, aes(x = log10(Freq), y = IFNG, color = Expanded, fill = Expanded)) + 
   geom_point() + 
@@ -249,20 +406,44 @@ ggplot(clone_df, aes(x = log10(Freq), y = IFNG, color = Expanded, fill = Expande
   geom_smooth(method = "lm", se = TRUE, fullrange = F) + 
   scale_color_manual(values = c("#7F0000", "darkgrey")) + 
   scale_fill_manual(values = c("#7F0000", "darkgrey"))
-dev.off()
+#dev.off()
+```
+
+```{r, Barplots per celltype}
+expanded_summary <- df_clonotypes %>%
+  group_by(predicted.celltype, Entity, Expanded) %>%
+  summarise(Count = n()) %>%
+  ungroup()
+
+total_clones <- expanded_summary %>%
+  group_by(predicted.celltype, Entity) %>%
+  summarise(Total = sum(Count)) %>%
+  ungroup()
+
+# Merge the total clonotype counts with the expanded summary to calculate fractions
+expanded_summary <- expanded_summary %>%
+  left_join(total_clones, by = c("predicted.celltype", "Entity")) %>%
+  mutate(Fraction = Count / Total)
+
+
+
+ggplot(expanded_summary, aes(x = predicted.celltype, y = Fraction, fill = Expanded)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  facet_wrap(~ Entity) +  # Separate by Entity (rLN, FL, DLBCL)
+  scale_fill_manual(values = c("lightgrey", "#AD2E24")) +  # Colors for Expanded and Non-expanded
+  theme_classic() +
+  xlab("Predicted Cell Type") +  # X-axis label
+  ylab("Fraction of Clonotypes") +  # Y-axis label
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
 ```
 
 ```{r}
 clone_df <- data.frame(Clone = unique(df_clonotypes$raw_clonotype_id))
 
 # Mean IFNG expression per clone
-clone_df$IFNG <- unlist(lapply(clone_df$Clone, function(clonotype) {
+clone_df$IFNG <- unlist(lapply(clone_df$Clone, 
+                               function(clonotype) {
   mean(df_clonotypes[df_clonotypes$raw_clonotype_id == clonotype, "IFNG"])
-}))
-
-# Mean CXCL13 expression per clone
-clone_df$CXCL13 <- unlist(lapply(clone_df$Clone, function(clonotype) {
-  mean(df_clonotypes[df_clonotypes$raw_clonotype_id == clonotype, "CXCL13"])
 }))
 
 # Clone size (frequency)
@@ -271,55 +452,7 @@ clone_df$Freq <- unlist(lapply(clone_df$Clone, function(clonotype) {
 }))
 
 # Expansion status
-clone_df$Expanded <- ifelse(clone_df$Freq > 6, "Expanded", "Non-expanded")
-
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/response_letter_cxcl13_ifng_correlation.pdf", width = 6, height = 4)
-ggplot(clone_df, aes(x = CXCL13, y = IFNG, color = Expanded)) + 
-  geom_point(size = 1) + 
-  geom_smooth(data = clone_df_corr, aes(x = CXCL13, y = IFNG), 
-              method = "lm", se = TRUE, color = "black", inherit.aes = FALSE) +
-  scale_color_manual(values = c("Expanded" = "#7F0000", "Non-expanded" = "darkgrey")) +
-  theme_bw() + 
-  ggtitle("CXCL13 vs IFNG (per clone)") + 
-  xlab("Mean CXCL13 expression (per clone)") + 
-  ylab("Mean IFNG expression (per clone)")
-dev.off()
-```
-
-```{r, Stats on gene expression}
-# Total number of unique clones
-n_clones_total <- nrow(clone_df)
-
-# Clones expressing CXCL13, IFNG, or both
-n_clones_cxcl13 <- sum(clone_df$CXCL13 > 0)
-n_clones_ifng <- sum(clone_df$IFNG > 0)
-n_clones_both <- sum(clone_df$CXCL13 > 0 & clone_df$IFNG > 0)
-n_clones_either <- sum(clone_df$CXCL13 == 0 & clone_df$IFNG == 0)
-
-# Print results
-cat("Total clonotypes:", n_clones_total, "\n")
-cat("Fraction of clonotypes expressing CXCL13:", round(n_clones_cxcl13 / n_clones_total, 3), "\n")
-cat("Fraction of clonotypes expressing IFNG:", round(n_clones_ifng / n_clones_total, 3), "\n")
-cat("Fraction of clonotypes expressing BOTH CXCL13 & IFNG:", round(n_clones_both / n_clones_total, 3), "\n")
-cat("Fraction of clonotypes expressing EITHER CXCL13 or IFNG:", round(n_clones_either / n_clones_total, 3), "\n")
-
-```
-
-```{r}
-clone_df <- data.frame(Clone = unique(df_clonotypes$raw_clonotype_id))
-clone_df$IFNG <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), 
-                               function(clonotype){
-                                 mean(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), "IFNG"])
-                                 }))
-
-clone_df$Freq <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), 
-                               function(clonotype){
-                                 nrow(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), ])
-                                 }))
-```
-
-```{r}
-clone_df$Expanded <- ifelse(clone_df$Freq > 6, "Yes", "No")
+clone_df$Expanded <- ifelse(clone_df$Freq > 7, "Expanded", "Non-expanded")
 
 clones_meta <- clone_df[, c("Clone", "Expanded")]
 colnames(clones_meta) <- c("raw_clonotype_id", "Expanded")
@@ -332,30 +465,29 @@ colnames(clone_entity_bar) <- c("Expanded", "Entity", "Freq")
 ```
 
 ```{r}
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_ifng_clonal.pdf", width = 7, height = 3)
+df_clonotypes$Expanded <- factor(df_clonotypes$Expanded, levels = c("Non-expanded", "Expanded"))
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_ifng_clonal_threshold7_woNaive.pdf", width = 7, height = 3)
+
 ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) + 
-  geom_boxplot(aes(color = Expanded, fill = Expanded), alpha = 0.5, outlier.size = 0.05) + 
-  theme_bw() + 
-  facet_wrap(~Entity) + 
-  scale_color_manual(values = c("darkgrey", "#7F0000")) + 
-  scale_fill_manual(values = c("lightgrey", "#B13A2C")) + stat_compare_means()
-dev.off()
-
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot_alternative.pdf", width = 3, height = 3)
-ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=rev(c("rLN", "FL", "DLBCL")))), 
-       aes(x = Expanded, y = Freq, fill = Entity, label=Freq)) + 
-  geom_bar(stat = "identity", position = "fill") + 
+  geom_boxplot(aes(color = Expanded, fill = Expanded), alpha = 1, outlier.size = 0.1) + 
   theme_classic() + 
-  scale_fill_manual(values = c("#67B86E", "#8BCDE0", "#8D60B5"))
-dev.off()
-
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot.pdf", width = 3, height = 3)
-ggplot(clone_entity_bar %>% mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL"))), 
-       aes(y = Freq, x = Entity, label=Freq, color = Expanded, fill = Expanded)) + 
-  geom_bar(stat = "identity", position = "fill", alpha = 0.5) + 
-  scale_color_manual(values = c("darkgrey", "#7F0000")) + 
-  scale_fill_manual(values = c("lightgrey", "#B13A2C")) + 
-  theme_classic()
+  facet_wrap(~Entity) + 
+  scale_color_manual(values = c("black", "black")) + 
+  scale_fill_manual(values = c("Non-expanded" = "lightgrey", "Expanded" = "#AD2E24")) + 
+  stat_compare_means()
 dev.off()
 ```
 
+
+```{r}
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot_threshold7_woNaive.pdf", width = 3, height = 3)
+ggplot(clone_entity_bar %>%
+         mutate(Entity = factor(Entity, levels = c("rLN", "FL", "DLBCL")),
+                Expanded = factor(Expanded, levels = c("Non-expanded", "Expanded"))), 
+       aes(y = Freq, x = Entity, label = Freq, color = Expanded, fill = Expanded)) + 
+  geom_bar(stat = "identity", position = "fill", alpha = 1) + 
+  scale_color_manual(values = c("Non-expanded" = "black", "Expanded" = "black")) + 
+  scale_fill_manual(values = c("Non-expanded" = "lightgrey", "Expanded" = "#B13A2C")) + 
+  theme_classic()
+dev.off()
+```
