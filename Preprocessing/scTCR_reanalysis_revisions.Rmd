@@ -219,13 +219,18 @@ DF_TCRrep <- DF_TCRrep %>%
 ```
 
 ```{r}
+DF_TCRrep$Entity <- gsub("DLBCL, GCB", "DLBCL", DF_TCRrep$Entity)
+sobj@meta.data$Entity <- gsub("DLBCL, GCB", "DLBCL", sobj@meta.data$Entity)
+```
+
+```{r}
 #Subset it to have only the EM cells
-DF_TCRrep <- DF_TCRrep[!DF_TCRrep$predicted.celltype %in% "T-CD8_Naive", ]
+#DF_TCRrep <- DF_TCRrep[!DF_TCRrep$predicted.celltype %in% "T-CD8_Naive", ]
 ```
 
 ```{r}
 df_clonotypes <- DF_TCRrep %>% 
-  filter(!is.na(raw_clonotype_id)) %>% 
+  #filter(!is.na(raw_clonotype_id)) %>% 
   filter(!is.na(Entity)) %>% 
   select(barcode, PatientID, raw_clonotype_id, refUMAP_1, refUMAP_2, predicted.celltype, Entity) %>% 
   distinct() %>% 
@@ -253,9 +258,7 @@ DefaultAssay(cd8em) <- "integratedRNA"
 cd8em <- FindVariableFeatures(cd8em)
 cd8em <- RunPCA(object = cd8em, verbose = FALSE, features = setdiff(VariableFeatures(object = cd8em), noise_genes))
 cd8em <- RunUMAP(object = cd8em, reduction = "pca", dims = 1:50, return.model=TRUE) #, spread = 1, min.dist = 0.0000001, a = 0.12, b = 0.9
-```
 
-```{r}
 DefaultAssay(cd8em) <- "RNA"
 cd8em <- AddMetaData(cd8em, metadata = FetchData(cd8em, vars = c("CXCL13")))
 
@@ -289,39 +292,73 @@ sobj <- AddMetaData(
 ```
 
 ```{r}
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/ifngumap_tcrobj.pdf", width = 4.5, height = 3)
+#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/ifngumap_tcrobj_split.pdf", width = 9, height = 3)
 ggplot(sobj@meta.data, 
        aes(x = refUMAP_1, y = refUMAP_2, color = IFNG)) +
-  geom_point(size = 1, stroke=0) +
+  geom_point(size = 0.5, stroke=0) +
+  scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) + 
+  theme_classic() + 
+  facet_wrap(~Entity)
+#dev.off()
+```
+
+```{r}
+#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/ifngumap_tcrobj.pdf", width = 9, height = 3)
+ggplot(sobj@meta.data, 
+       aes(x = refUMAP_1, y = refUMAP_2, color = IFNG)) +
+  geom_point(size = 0.5, stroke=0) +
   scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) + 
   theme_classic()
-dev.off()
+#dev.off()
 ```
 
 #UMAP Figure 3 on TCR data - clone size
-```{r}
-#refUMAP has to end up in here
+```{r, Figure 3 UMAP}
+all_barcodes <- sub("_", "", rownames(sobj@meta.data))
+tcrep_barcodes <- unique(DF_TCRrep$Barcode_full)
+missing_barcodes <- setdiff(all_barcodes, tcrep_barcodes)
+
+# Extract metadata for missing cells since not all cells have a clonotype 
+missing_meta <- sobj@meta.data[which(sub("_", "", rownames(sobj@meta.data)) %in% missing_barcodes), ]
+
+########## Add refUMAP coordinates
+umap_coords <- sobj@reductions$ref.umap@cell.embeddings
+missing_umap <- umap_coords[rownames(missing_meta), ]
+
+# Create combined dataframe for missing cells ---
+missing_df <- data.frame(
+  refUMAP_1 = missing_umap[, 1],
+  refUMAP_2 = missing_umap[, 2],
+  predicted.celltype = missing_meta$predicted.celltype,  # adjust if column name differs
+  Entity = factor(missing_meta$Entity, levels=c("rLN", "FL", "DLBCL", "DLBCL, GCB")),
+  PatientID = missing_meta$PatientID,
+  row.names = NULL
+)
+
+# Create your original plotting dataframe
 DF_5prime_umap <- DF_TCRrep %>% 
   filter(!is.na(Entity)) %>%
   dplyr::select(refUMAP_1, refUMAP_2, predicted.celltype, Entity, PatientID) %>% 
   distinct() %>% 
-  mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL")))
-DF_5prime_umap_cd8 <- DF_5prime_umap
+  mutate(Entity=factor(Entity, levels=c("rLN", "FL", "DLBCL", "DLBCL, GCB")))
+
+# Combine both
+DF_5prime_umap_cd8_full <- bind_rows(DF_5prime_umap, missing_df)
 ```
 
-```{r}
+
+```{r, Figure 3 UMAP}
 p1 <- ggplot() +
-  geom_point(data=DF_5prime_umap_cd8, aes(x=refUMAP_1, y=refUMAP_2), 
+  geom_point(data=DF_5prime_umap_cd8_full, aes(x=refUMAP_1, y=refUMAP_2), 
              size=1, alpha=1, color = '#ECECEC', stroke = 0) +
-  geom_point(data=df_clonotypes %>% 
-               filter(n > 2), 
+  geom_point(data=df_clonotypes,
              aes(x=refUMAP_1, y=refUMAP_2, size=n, color=Entity), shape=21, stroke=0.7, alpha=1) +
   scale_color_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E", 'DLBCL, GCB'="#67B86E"), guide="none")+
   scale_fill_manual(values = c("FL" = "#8BCDE0", "rLN" = "#8D60B5", "DLBCL" = "#67B86E", 'DLBCL, GCB'="#67B86E"), guide="none")+
   scale_size_continuous(range=c(1, 10), 
                         limits=c(3, 50), 
-                        breaks=c(5, 20, 35, 50),
-                        labels=c("5", "20", "35", "> 50"), 
+                        breaks=c(3, 20, 35, 50),
+                        labels=c("3", "20", "35", "> 50"), 
                         name = NULL)+
   #facet_wrap(~Entity, nrow = 1)+
   geom_text(data = df_clonotypes %>% dplyr::select(PatientID, Entity) %>% 
@@ -332,46 +369,104 @@ p1 <- ggplot() +
   ylab("refUMAP-2")+
   theme_classic() +
   theme(legend.position = "right")
+```
 
+
+```{r, Figure 3 UMAP}
 pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/202310_TCRseq_UMAP_allCD8.pdf", width = 5, height = 3)
 plot(p1)
 dev.off()
 ```
 
 ```{r}
-DF_TCRrep_cd8 <- DF_TCRrep
+# Normalize DF_TCRrep barcodes (only)
+DF_TCRrep$Barcode_full <- sub("^_", "", DF_TCRrep$Barcode_full)
+# Create normalized copy of sobj barcodes for comparison
+sobj_barcodes <- sub("^_", "", rownames(sobj@meta.data))
+# Find missing barcodes
+missing_barcodes <- setdiff(sobj_barcodes, DF_TCRrep$Barcode_full)
+# Get original barcodes from sobj that match the missing normalized ones
+original_missing_barcodes <- rownames(sobj@meta.data)[sub("^_", "", rownames(sobj@meta.data)) %in% missing_barcodes]
+missing_meta <- sobj@meta.data[original_missing_barcodes, ]
 
+# Add metadata
+umap_coords <- sobj@reductions$ref.umap@cell.embeddings
+missing_umap <- umap_coords[rownames(missing_meta), ]
+
+missing_df <- data.frame(
+  Barcode_full = sub("^_", "", original_missing_barcodes),
+  Entity = missing_meta$Entity,
+  predicted.celltype = missing_meta$predicted.celltype,
+  PatientID = missing_meta$PatientID, 
+  refUMAP_1 = missing_umap[, 1],
+  refUMAP_2 = missing_umap[, 2]
+)
+
+# Add placeholder TCR columns as NA
+missing_df$raw_clonotype_id <- NA
+
+# Get all column names in DF_TCRrep
+all_cols <- colnames(DF_TCRrep)
+
+# Add any missing columns to missing_df and fill with NA
+for (col in setdiff(all_cols, colnames(missing_df))) {
+  missing_df[[col]] <- NA
+}
+
+# Reorder columns to match DF_TCRrep
+missing_df <- missing_df[, all_cols]
+
+# Combine safely
+DF_TCRrep_cd8 <- bind_rows(DF_TCRrep, missing_df)
+```
+
+#From now on work with DF_TCRrep_cd8
+
+```{r}
 clonotype_df <- as.data.frame.matrix(table(DF_TCRrep_cd8$raw_clonotype_id, DF_TCRrep_cd8$Entity))
 clonotype_freq <- as.data.frame(rowSums(clonotype_df))
 colnames(clonotype_freq) <- "Freq"
 ```
 
+
 ```{r}
-#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelA_clonesize_newER_threshold7_woNaive.pdf", width = 6, height = 4)
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelA_clonesize_newER_threshold6_woNaive.pdf", width = 6, height = 4)
 ggplot(clonotype_freq, aes(x = log10(Freq) )) + 
   geom_density() + 
   theme_bw() + 
-  geom_vline(xintercept = log10(7), 
+  geom_vline(xintercept = log10(6), 
              linetype="dashed", color = "#7F0000", size=1) +
   xlab("log10(Freq_Clone)") + 
   ggtitle("6,349 clonotypes")
-#dev.off()
+dev.off()
 ```
+
 
 ```{r}
 #From seurat object extract cxcl13 and ifng expression
-merged_exp <- FetchData(sobj, vars = c('IFNG', 'CXCL13'))
-merged_exp$Barcode_full <- rownames(merged_exp)
-merged_exp$Barcode_full <- sub("^_", "", merged_exp$Barcode_full)
+merged_exp <- FetchData(sobj, vars = c('rna_IFNG', 'CXCL13'))
+colnames(merged_exp) <- c('IFNG', 'CXCL13')
 ```
 
+```{r}
+merged_exp$Barcode_full <- rownames(merged_exp)
+merged_exp$Barcode_full <- sub("^_", "", merged_exp$Barcode_full)
+DF_TCRrep_cd8 <- merge(DF_TCRrep_cd8, merged_exp, by = "Barcode_full")
+```
 
 ```{r}
-DF_TCRrep_cd8 <- merge(DF_TCRrep_cd8, merged_exp, by = "Barcode_full")
+DF_TCRrep_cd8$IFNG.x <- NULL
+DF_TCRrep_cd8$IFNG <- DF_TCRrep_cd8$IFNG.y
+DF_TCRrep_cd8$IFNG.y <- NULL
+DF_TCRrep_cd8$CXCL13.x <- NULL
+DF_TCRrep_cd8$CXCL13 <- DF_TCRrep_cd8$CXCL13.y
+DF_TCRrep_cd8$CXCL13.y <- NULL
+```
 
+```{r}
 df_clonotypes <- 
   DF_TCRrep_cd8 %>% 
-  filter(!is.na(raw_clonotype_id)) %>% 
+  #filter(!is.na(raw_clonotype_id)) %>% 
   filter(!is.na(Entity)) %>% 
   mutate(Entity=factor(Entity, levels=c("rLN", 
                                         "FL", 
@@ -380,23 +475,25 @@ df_clonotypes <-
 
 ```{r}
 clone_df <- data.frame(Clone = unique(df_clonotypes$raw_clonotype_id))
-clone_df$IFNG <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), function(clonotype){
-  mean(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), "IFNG"])
-  }))
 
 clone_df$Freq <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), 
                                function(clonotype){
   nrow(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), ])
   }))
 
-clone_df$Expanded <- ifelse(clone_df$Freq > 7, 
+clone_df$Expanded <- ifelse(clone_df$Freq > 6, 
                             "Expanded", 
                             "Non-expanded")
 ```
 
+```{r}
+clone_df$IFNG <- unlist(lapply(unique(df_clonotypes$raw_clonotype_id), function(clonotype){
+  mean(df_clonotypes[which(df_clonotypes$raw_clonotype_id == clonotype), "IFNG"])
+  }))
+```
 
 ```{r}
-#pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelB_clonesize_ifng_correlation_threshold7_woNaive.pdf", width = 6, height = 4)
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/SFig10_panelB_clonesize_ifng_correlation_threshold6_woNaive.pdf", width = 6, height = 4)
 
 ggplot(clone_df, aes(x = log10(Freq), y = IFNG, color = Expanded, fill = Expanded)) + 
   geom_point() + 
@@ -406,35 +503,7 @@ ggplot(clone_df, aes(x = log10(Freq), y = IFNG, color = Expanded, fill = Expande
   geom_smooth(method = "lm", se = TRUE, fullrange = F) + 
   scale_color_manual(values = c("#7F0000", "darkgrey")) + 
   scale_fill_manual(values = c("#7F0000", "darkgrey"))
-#dev.off()
-```
-
-```{r, Barplots per celltype}
-expanded_summary <- df_clonotypes %>%
-  group_by(predicted.celltype, Entity, Expanded) %>%
-  summarise(Count = n()) %>%
-  ungroup()
-
-total_clones <- expanded_summary %>%
-  group_by(predicted.celltype, Entity) %>%
-  summarise(Total = sum(Count)) %>%
-  ungroup()
-
-# Merge the total clonotype counts with the expanded summary to calculate fractions
-expanded_summary <- expanded_summary %>%
-  left_join(total_clones, by = c("predicted.celltype", "Entity")) %>%
-  mutate(Fraction = Count / Total)
-
-
-
-ggplot(expanded_summary, aes(x = predicted.celltype, y = Fraction, fill = Expanded)) +
-  geom_bar(stat = "identity", position = "stack", width = 0.7) +
-  facet_wrap(~ Entity) +  # Separate by Entity (rLN, FL, DLBCL)
-  scale_fill_manual(values = c("lightgrey", "#AD2E24")) +  # Colors for Expanded and Non-expanded
-  theme_classic() +
-  xlab("Predicted Cell Type") +  # X-axis label
-  ylab("Fraction of Clonotypes") +  # Y-axis label
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+dev.off()
 ```
 
 ```{r}
@@ -452,8 +521,11 @@ clone_df$Freq <- unlist(lapply(clone_df$Clone, function(clonotype) {
 }))
 
 # Expansion status
-clone_df$Expanded <- ifelse(clone_df$Freq > 7, "Expanded", "Non-expanded")
+clone_df$Expanded <- ifelse(clone_df$Freq > 6, "Expanded", "Non-expanded")
+```
 
+
+```{r}
 clones_meta <- clone_df[, c("Clone", "Expanded")]
 colnames(clones_meta) <- c("raw_clonotype_id", "Expanded")
 
@@ -465,29 +537,107 @@ colnames(clone_entity_bar) <- c("Expanded", "Entity", "Freq")
 ```
 
 ```{r}
-df_clonotypes$Expanded <- factor(df_clonotypes$Expanded, levels = c("Non-expanded", "Expanded"))
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_ifng_clonal_threshold7_woNaive.pdf", width = 7, height = 3)
+df_clonotypes <- DF_TCRrep_cd8 %>%
+  filter(!is.na(raw_clonotype_id)) %>%
+  filter(!is.na(Entity)) %>%
+  mutate(Entity = ifelse(Entity == "DLBCL, GCB", "DLBCL", Entity))
 
-ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) + 
-  geom_boxplot(aes(color = Expanded, fill = Expanded), alpha = 1, outlier.size = 0.1) + 
-  theme_classic() + 
-  facet_wrap(~Entity) + 
-  scale_color_manual(values = c("black", "black")) + 
-  scale_fill_manual(values = c("Non-expanded" = "lightgrey", "Expanded" = "#AD2E24")) + 
-  stat_compare_means()
-dev.off()
+clone_df <- df_clonotypes %>%
+  group_by(raw_clonotype_id) %>%
+  summarise(
+    Freq = n(),
+    IFNG = mean(IFNG, na.rm = TRUE)
+  ) %>%
+  mutate(
+    Expanded = ifelse(Freq > 6, "Expanded", "Non-expanded")
+  )
+
+
+# Map back to each cell
+expanded_df <- DF_TCRrep[, c("Barcode_full", "raw_clonotype_id")]
+expanded_df <- merge(expanded_df, 
+                     clone_df[, c("raw_clonotype_id", "Expanded")], 
+                     by = "raw_clonotype_id", 
+                     all.x = TRUE)
+
+# Mark cells with no clonotype as Non-expanded
+expanded_df$Expanded[is.na(expanded_df$Expanded)] <- "Non-expanded"
+
+
+# Fetch IFNG + meta from sobj
+ifng_df <- FetchData(sobj, vars = c("IFNG"))
+ifng_df$Barcode_full <- sub("^_", "", rownames(ifng_df))
+ifng_df$Entity <- sobj@meta.data[rownames(ifng_df), "Entity"]
+ifng_df$predicted.celltype <- sobj@meta.data[rownames(ifng_df), "predicted.celltype"]
+ifng_df$Entity <- ifelse(ifng_df$Entity == "DLBCL, GCB", "DLBCL", ifng_df$Entity)  # Normalize
+
+
+# Merge IFNG/meta with expanded info
+plot_df <- merge(ifng_df, expanded_df[, c("Barcode_full", "Expanded")],
+                 by = "Barcode_full", all.x = TRUE)
+
+# Assign Non-expanded to any missing
+plot_df$Expanded[is.na(plot_df$Expanded)] <- "Non-expanded"
+
+# Set factor levels
+plot_df$Expanded <- factor(plot_df$Expanded, levels = c("Non-expanded", "Expanded"))
+plot_df$Entity <- factor(plot_df$Entity, levels = c("rLN", "FL", "DLBCL"))
+
+#I think barcode full can be duplicated in there 
+plot_df <- distinct(plot_df)
 ```
 
 
 ```{r}
-pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_G_Barplot_threshold7_woNaive.pdf", width = 3, height = 3)
-ggplot(clone_entity_bar %>%
-         mutate(Entity = factor(Entity, levels = c("rLN", "FL", "DLBCL")),
-                Expanded = factor(Expanded, levels = c("Non-expanded", "Expanded"))), 
-       aes(y = Freq, x = Entity, label = Freq, color = Expanded, fill = Expanded)) + 
-  geom_bar(stat = "identity", position = "fill", alpha = 1) + 
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_BoxPlot_IFNG_threshold6_woNaive.pdf", width = 10, height = 4)
+ggplot(plot_df, aes(x = Expanded, y = IFNG)) + 
+  geom_boxplot(aes(color = Expanded, fill = Expanded), 
+               alpha = 1, outlier.size = 0.1, size = 0.5) + 
+  theme_classic() + 
+  facet_wrap(~Entity) + 
+  scale_color_manual(values = c("black", "black")) + 
+  scale_fill_manual(values = c("Non-expanded" = "lightgrey", 
+                               "Expanded" = "#7F0000")) + 
+  stat_compare_means()
+dev.off()
+```
+
+#Figure 3
+```{r}
+ggplot(plot_df, aes(x = Expanded, y = IFNG)) + 
+  geom_boxplot(aes(color = Expanded, fill = Expanded), 
+               alpha = 1, outlier.size = 0.1, size = 0.5) + 
+  theme_classic() + 
+  facet_wrap(~Entity) + 
+  scale_color_manual(values = c("black", "black")) + 
+  scale_fill_manual(values = c("Non-expanded" = "lightgrey", 
+                               "Expanded" = "#7F0000")) + 
+  stat_compare_means()
+```
+
+```{r}
+clone_entity_bar <- plot_df %>%
+  group_by(Entity, Expanded) %>%
+  summarise(Freq = n(), .groups = "drop")
+
+clone_entity_bar <- clone_entity_bar %>%
+  mutate(
+    Entity = factor(Entity, levels = c("rLN", "FL", "DLBCL")),
+    Expanded = factor(Expanded, levels = c("Non-expanded", "Expanded"))
+  )
+```
+
+
+```{r}
+pdf("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202503_TCRseq/Figure3_Barplot_threshold6_woNaive.pdf", width = 6, height = 4)
+ggplot(clone_entity_bar, 
+       aes(x = Entity, y = Freq, fill = Expanded, color = Expanded, label = Freq)) + 
+  geom_bar(stat = "identity", position = "fill", alpha = 1, size = 0.5) + 
+  scale_fill_manual(values = c("Non-expanded" = "lightgrey", "Expanded" = "#7F0000")) + 
   scale_color_manual(values = c("Non-expanded" = "black", "Expanded" = "black")) + 
-  scale_fill_manual(values = c("Non-expanded" = "lightgrey", "Expanded" = "#B13A2C")) + 
-  theme_classic()
+  theme_classic() + 
+  ylab("Proportion of Cells") +
+  xlab("Entity") +
+  guides(color = "none")  # optional: hides color border legend
 dev.off()
 ```
