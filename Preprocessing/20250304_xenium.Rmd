@@ -1,0 +1,1781 @@
+---
+title: "20250304_xenium_ricover_revision2"
+output: html_document
+date: "2025-03-04"
+---
+
+```{r}
+options(bitmapType="cairo")
+```
+
+#Set wd
+```{r}
+setwd("/g/huber/users/czernilo/proj/2021_LNS012/")
+out_dir_obj <- "/g/huber/users/czernilo/proj/2021_LNS012/seurat_obj/"
+out_dir_plots <- "/g/huber/users/czernilo/proj/2021_LNS012/output/"
+out_dir_de <- "/g/huber/users/czernilo/proj/2021_LNS012/DE_analysis/"
+out_dir_figs <- "/g/huber/users/czernilo/proj/2021_LNS012/output/fig/"
+out_dir_xenium <- "/g/huber/users/czernilo/proj/2021_LNS012/xenium/"
+```
+
+#Annotation colors
+```{r}
+annotation_colors <- list("patient"= c("DLBCL-1"="#33691E",
+                                        "DLBCL-2"="#55882f",
+                                        "DLBCL-3"="#689F38",
+                                        "DLBCL-4"="#7CB342",
+                                        "DLBCL-5"="#8BC34A",
+                                        "DLBCL-6"="#9CCC65",
+                                        "DLBCL-7"="#AED581",
+                                        "DLBCL-8"="#C5E1A5",
+                                        "FL-1"="#86B0D3",
+                                        "FL-2"="#5D9FC9",
+                                        "FL-3"="#318DBE",
+                                        "FL-4"="#0D75B2",
+                                        "FL-5"="#04649C",
+                                        "FL-6"="#03507E",
+                                        "rLN-1"="#40004B",
+                                        "rLN-2"="#71267D",
+                                        "rLN-3"="#9263A3",
+                                        "rLN-4"="#B696C5",
+                                        "rLN-5"="#D9C2DE"),
+                          "Type_binned"= c("rLN"= "#8D60B5",
+                                            "FL"= "#8BCDE0",
+                                            "DLBCL"= "#67B86E"),
+                          "Type_binned_v2"=c("Healthy"= "#8D60B5",
+                                             "FL"= "#8BCDE0",
+                                             "DLBCL"= "#67B86E"),
+                          "Type_binned_v3"=c("Tonsil"= "#8D60B5",
+                                             "FL"= "#8BCDE0",
+                                             "DLBCL"= "#67B86E"),
+                          "Clusters_final"=c("artBEC"="#F31515",
+                                                    "bLEC"="#C2A946",
+                                                    "capBEC"="#F5818D",
+                                                    "cLEC"="#FF9709",
+                                                    "collectLEC"="#FFF16A",
+                                                    "DLBCL-B"="#83CAE8",
+                                                    "FDC"="#088B1A",
+                                                    "FL-B"="#0EBCE8",
+                                                    "fLEC"="gold1",
+                                                    "Healthy B"="#0C80ED",
+                                                    "MRC/IFR"="#A1D74F",
+                                                    "LAF"="#2AC200",
+                                                    "med-FRC"="#005C4C",
+                                                    "msLEC"="#F5C56C",
+                                                    "Myeloid"="snow3",
+                                                    "PC"="#0330E3",
+                                                    "PvC"="#659445",
+                                                    "SMC"="#4E7329", #"#BEDEA6",
+                                                    "T-FH"="mediumorchid1",
+                                                    "T-H"="magenta4",
+                                                    "T-PR"="purple4",
+                                                    "T-REG"="darkorchid1",
+                                                    "T-TOX"="mediumpurple1",
+                                                    "TRC"="#96B577",
+                                                    #"tipBEC"="hotpink1", 
+                                                    "LA-BEC"="hotpink1",
+                                                    "valveLEC"="#9E770E",
+                                                    "vnBEC"="#9C194B"),
+                          "Clusters"=c("artBEC"="tan1",
+                                       "capBEC"="sienna3",
+                                       "CCL19hi TRC"="forestgreen",
+                                       "CCR7+ DC"="red4",
+                                       "CD146- PvC"="#AAA64E",
+                                       "CD34+ SC"="limegreen",
+                                       "CD36+ PvC"="#6F7520",
+                                       "CD8+ T"="darkorchid1",
+                                       "cLEC"="gold1",
+                                       "CXCL9+ TRC"="olivedrab3",
+                                       "DLBCL-1 B"="cadetblue3",
+                                       "DLBCL-1 SC"="olivedrab",
+                                       "DLBCL-2 B"="deepskyblue1",
+                                       "DLBCL-3 B"="skyblue",
+                                       "DLBCL-5 B"="steelblue4",
+                                       "DLBCL-6 B"="lightblue2",
+                                       "DLBCL-7 B"="steelblue1",
+                                       "DLBCL-8 B"="dodgerblue1",
+                                       "ECM-hi SC"="chartreuse3",
+                                       "FDC"="greenyellow",
+                                       "FL B"="paleturquoise4",
+                                       "FL-1 B"="turquoise3",
+                                       "FL-2 B"="mediumaquamarine",
+                                       "FL-2/3 SC"="palegreen4",
+                                       "FL-3 B"="darkolivegreen3",
+                                       "FL-4 B"="lightseagreen",
+                                       "FL-4/6 B"="cyan4",
+                                       "FL-5 B"="turquoise",
+                                       "fLEC"="yellow3",
+                                       "LYVE1+ LEC"="khaki",
+                                       "Mø"="hotpink",
+                                       "Naive B"="royalblue1",
+                                       "NG2+ PvC"="#B5BF6B",
+                                       "NK"="blueviolet",
+                                       "NKT"="mediumpurple1",
+                                       "PC"="blue3",
+                                       "pDC"="tomato",
+                                       "T-fh"="mediumorchid1",
+                                       "T-h"="magenta4",
+                                       "T-reg"="purple4",
+                                       "vnBEC"="darkorange1"),
+                          "binned_clusters"=c("artBEC"="#F31515",
+                                              "capBEC"="#F5818D",
+                                              "CD34+ SC"="#A9E075",
+                                              "cLEC"="#FF9709",
+                                              "DLBCL-B"="#83CAE8",
+                                              "FDC"="#21D986",
+                                              "FL-B"="#0EBCE8",
+                                              "fLEC"="gold1",
+                                              "Healthy B"="#0C80ED",
+                                              "LAF"="#2AC200",
+                                              "msLEC"="#F5C56C",
+                                              "Myeloid"="#C7D6A1",
+                                              "PC"="#0330E3",
+                                              "PvC"="#71A73C",
+                                              "T-FH"="mediumorchid1",
+                                              "T-H"="magenta4",
+                                              "T-PR"="purple4",
+                                              "T-REG"="darkorchid1",
+                                              "T-TOX"="mediumpurple1",
+                                              "TRC"="#0B8B1A",
+                                              "vnBEC"="#9C194B"),
+                          "Clusters_Abe"=c("artBEC"="#F31515",
+                                           "capBEC"="#F5818D",
+                                           "advSC"="#A9E075",
+                                           "cLEC"="#FF9709",
+                                           "DLBCL-B"="#83CAE8",
+                                           "FDC"="#21D986",
+                                           "FL-B"="#0EBCE8",
+                                           "fLEC"="gold1",
+                                           "Healthy B"="#0C80ED",
+                                           "LAF"="#2AC200",
+                                           "msLEC"="#F5C56C",
+                                           "Myeloid"="#C7D6A1",
+                                           "valveLEC"="grey70",
+                                           "AGT-SC"="#DBF227", 
+                                           "MRC"="#005C53", 
+                                           "PC"="#0330E3",
+                                           "PvC/SMC"="#71A73C",
+                                           "T-FH"="mediumorchid1",
+                                           "T-H"="magenta4",
+                                           "T-PR"="purple4",
+                                           "T-REG"="darkorchid1",
+                                           "T-TOX"="mediumpurple1",
+                                           "TRC"="#0B8B1A",
+                                           "vnBEC"="#9C194B", 
+                                           "tipBEC"="grey70", 
+                                           "bLEC"="grey70", 
+                                           "collectLEC"="grey70"),
+                          "binned_clusters2"=c("artBEC"="#F31515",
+                                               "capBEC"="#F5818D",
+                                               "CD34+ SC"="#A9E075",
+                                               "cLEC"="#FF9709",
+                                               "FDC"="#21D986",
+                                               "fLEC"="gold1",
+                                               "LAF"="#2AC200",
+                                               "msLEC"="#F5C56C",
+                                               "PvC"="#71A73C",
+                                               "TRC"="#0B8B1A",
+                                               "vnBEC"="#9C194B"),
+                          "Clusters_paper"=c("BEC"="#F5818D",
+                                                    "LEC"="#FF9709",
+                                                    "DLBCL-B"="#83CAE8",
+                                                    "FL-B"="#0EBCE8",
+                                                    "Healthy B"="#0C80ED",
+                                                    "Myeloid"="snow3",
+                                                    "PC"="#0330E3",
+                                                    "FRC"="#BEDEA6",
+                                                    "FDC"="#088B1A",
+                                                    "rFRC"="#2AC200",
+                                                    "T-FH"="mediumorchid1",
+                                                    "T-H"="magenta4",
+                                                    "T-PR"="purple4",
+                                                    "T-REG"="darkorchid1",
+                                                    "T-TOX"="mediumpurple1",
+                                                    "rBEC"="hotpink1"),
+                          "gate"=c("DLBCL-B"="#83CAE8",
+                                   "FL-B"="#0EBCE8",
+                                   "fLEC"="gold1",
+                                   "Healthy B"="#0C80ED",
+                                   "Myeloid"="#C7D6A1",
+                                   "PC"="#0330E3",
+                                   "T-FH"="mediumorchid1",
+                                   "T-H"="magenta4",
+                                   "T-PR"="purple4",
+                                   "T-REG"="darkorchid1",
+                                   "T-TOX"="mediumpurple1",
+                                   "DN"="#71A73C", 
+                                   "MSC"="#2AC200", 
+                                   "LEC"="#FF9709",
+                                   "BEC"="#F5818D"),
+                          "Clusters_gates"=c("artBEC"="#F31515",
+                                             "capBEC"="#F5818D",
+                                             "CD34+ SC"="#A9E075",
+                                             "cLEC"="#FF9709",
+                                             "DLBCL-B"="#83CAE8",
+                                             "FDC"="#21D986",
+                                             "FL-B"="#0EBCE8",
+                                             "fLEC"="gold1",
+                                             "Healthy B"="#0C80ED",
+                                             "LAF"="#2AC200",
+                                             "msLEC"="#F5C56C",
+                                             "Myeloid"="#C7D6A1",
+                                             "PC"="#0330E3",
+                                             "PvC"="#71A73C",
+                                             "T-FH"="mediumorchid1",
+                                             "T-H"="magenta4",
+                                             "T-PR"="purple4",
+                                             "T-REG"="darkorchid1",
+                                             "T-TOX"="mediumpurple1",
+                                             "TRC"="#0B8B1A",
+                                             "vnBEC"="#9C194B",
+                                             "DN"="#71A73C", 
+                                             "MSC"="#2AC200", 
+                                             "LEC"="#FF9709",
+                                             "BEC"="#9C194B"),
+                          "FACS_Cluster"=c("BEC"="#E24275", 
+                                           "DN"="#5F7C0B",
+                                           "LEC"="#E67B09",
+                                           "MSC"="#72C216"),
+                          "Healthy_Abe"=c("msLEC"="#E65C17",
+                                          "bLEC"="#FF862B",
+                                          "cLEC"="#FFAA2B",
+                                          "fLEC"="#F1BA2B",
+                                          "valveLEC"="#FFDD1F"),
+                          "features"=c(pals::parula(1000))
+)
+```
+
+#Load libraries
+```{r}
+#library(aws.s3)
+
+library(Seurat)
+library(clustree)
+library(ggplot2)
+library(ggbeeswarm)
+library(ggpubr)
+library(gdata)
+
+#library(pheatmap)
+library(ComplexHeatmap)
+#library(dittoSeq)
+library(viridis)
+library(RColorBrewer)
+library(pals)
+#library(wesanderson)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(readxl)
+library(patchwork)
+
+
+library(org.Hs.eg.db)
+library(GO.db)
+library(biomaRt) #convert ms to human
+
+
+library(limma) #strsplit2
+#library(EnhancedVolcano)
+library(clusterProfiler)
+```
+
+#Load cores
+```{r}
+genes <- read.csv("/g/huber/users/czernilo/proj/2021_LNS012/xenium/core1_genes.csv")
+
+fl <- readRDS("/g/huber/users/czernilo/proj/2021_LNS012/xenium/core1_wFollicles_nuclear.rds")
+head(rownames(fl@assays$RNA))
+rownames(fl@assays$RNA) <- genes$X
+head(rownames(fl@assays$RNA))
+fl$type <- "FL"
+
+dlbcl2 <- readRDS("/g/huber/users/czernilo/proj/2021_LNS012/xenium/core3_nuclear.rds")
+head(rownames(dlbcl2@assays$RNA))
+rownames(dlbcl2@assays$RNA) <- genes$X
+head(rownames(dlbcl2@assays$RNA))
+dlbcl2$type <- "DLBCL"
+```
+
+#Merge
+```{r}
+DefaultAssay(fl) <- "RNA"
+DefaultAssay(dlbcl2) <- "RNA"
+
+# Manually merge count matrices before merging Seurat objects
+merged_counts <- cbind(GetAssayData(fl, layer = "counts"), GetAssayData(dlbcl2, layer = "counts"))
+merged_meta <- rbind(fl@meta.data, dlbcl2@meta.data)
+
+# Create a new Seurat object with the merged count matrix
+merged_obj <- CreateSeuratObject(counts = merged_counts, meta.data = merged_meta, assay = "RNA")
+dim(merged_obj@assays$RNA)
+```
+
+
+#Filter
+```{r}
+VlnPlot(merged_obj, features = "nCount_RNA", pt.size = 0.1) + NoLegend() + geom_hline(yintercept = 50)
+
+merged_obj <- subset(merged_obj, subset = nCount_RNA > 50)
+```
+#Log-normalize and SCT
+```{r}
+DefaultAssay(merged_obj) <- "RNA"
+merged_obj <- NormalizeData(merged_obj, assay = "RNA")
+merged_obj <- SCTransform(merged_obj, verbose = FALSE)
+
+```
+
+#Clustering
+```{r}
+merged_obj <- RunPCA(merged_obj, npcs = 30, features = rownames(merged_obj))
+merged_obj <- RunUMAP(merged_obj, dims = 1:30)
+merged_obj <- FindNeighbors(merged_obj, reduction = "pca", dims = 1:30)
+merged_obj <- FindClusters(merged_obj, resolution = 0.3)
+```
+
+```{r}
+DimPlot(merged_obj, group.by = "seurat_clusters", label = T)
+DimPlot(merged_obj, group.by = "type")
+```
+
+#Annotate cell types
+```{r, fig.height=20, fig.width=20}
+markers <- FindAllMarkers(merged_obj, only.pos = TRUE, min.pct = 0.2, assay = "RNA") 
+write.csv(markers, "/g/huber/users/czernilo/proj/2021_LNS012/xenium/markers.csv", row.names = FALSE)
+top15 <- markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
+
+pdf(paste0(out_dir_xenium, "xenium_markers_heatmap.pdf"), width = 15, height = 15)
+DoHeatmap(merged_obj, features = c(unique(top10$gene)), draw.line=T, label=T) + 
+       theme(axis.text.y=element_text(size = 15)) #+ scale_fill_gradient(colors = c("blue", "white", "red")))
+dev.off()
+```
+
+```{r}
+merged_obj@meta.data <- mutate(merged_obj@meta.data, cell_type = case_when(seurat_clusters %in% c(0)~ "FL-B",
+                                                         seurat_clusters %in% c(1)~ "DLBCL-B",
+                                                         seurat_clusters %in% c(2)~ "T",
+                                                         seurat_clusters %in% c(3)~ "FL-B prol",
+                                                         seurat_clusters %in% c(4)~ "DLBCL-B prol",
+                                                         seurat_clusters %in% c(5)~ "Myeloid",
+                                                         seurat_clusters %in% c(6)~ "FRC",
+                                                         seurat_clusters %in% c(7)~ "rFRC",
+                                                         seurat_clusters %in% c(8)~ "BEC",
+                                                         seurat_clusters %in% c(9)~ "FDC",
+                                                         seurat_clusters %in% c(10)~ "Myeloid",
+                                                         seurat_clusters %in% c(11)~ "weird"))
+
+DimPlot(merged_obj, group.by = "cell_type", label = T) + ggtitle("merged")
+
+```
+
+##Subcluster unclear cells
+```{r}
+bec <- subset(merged_obj, cell_type %in% c("BEC", "weird")) 
+DefaultAssay(bec) <- "SCT"
+```
+
+```{r}
+bec <- RunPCA(bec, npcs = 30, features = rownames(merged_obj))
+bec <- RunUMAP(bec, dims = 1:30)
+bec <- FindNeighbors(bec, reduction = "pca", dims = 1:30)
+bec <- FindClusters(bec, resolution = 0.2)
+```
+
+```{r, fig.height=15, fig.width=15}
+markers <- FindAllMarkers(bec, only.pos = TRUE, min.pct = 0.2, assay = "RNA") 
+
+top15 <- markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
+
+DoHeatmap(bec, features = c(unique(top15$gene)), draw.line=T, label=T) + 
+       theme(axis.text.y=element_text(size = 15)) #+ scale_fill_gradient(colors = c("blue", "white", "red")))
+```
+
+```{r}
+bec@meta.data <- mutate(bec@meta.data, cell_type2 = case_when(seurat_clusters %in% c(0)~ "BEC",
+                                                         seurat_clusters %in% c(1)~ "FRC",
+                                                         seurat_clusters %in% c(2)~ "FL-B",
+                                                         seurat_clusters %in% c(3)~ "FRC"))
+
+DimPlot(bec, group.by = "cell_type2")
+```
+
+##Rename unclear clusters in original obj
+```{r}
+#Extract cell names that belong to the clusters of interest
+bec_new <- rownames(bec@meta.data[which(bec@meta.data$seurat_clusters %in% c(0)), ])
+b_new <- rownames(bec@meta.data[which(bec@meta.data$seurat_clusters %in% c(2)), ])
+frc_new <- rownames(bec@meta.data[which(bec@meta.data$seurat_clusters %in% c(1,3)), ])
+
+#Define their new name
+bec_new_name <- rep("BEC", length(bec_new))
+names(bec_new_name) <- bec_new
+
+b_new_name <- rep("FL-B", length(b_new))
+names(b_new_name) <- b_new
+
+frc_new_name <- rep("FRC", length(frc_new))
+names(frc_new_name) <- frc_new
+
+#If you have more than 1 subclusters renamed, you need to merge 
+rename_subclusters <-  c(bec_new_name, b_new_name, frc_new_name)
+
+#Add metadata information to object
+merged_obj <- AddMetaData(merged_obj, 
+                        metadata = rename_subclusters, 
+                        col.name = "subcluster")
+merged_obj@meta.data$cell_type2 <- ifelse(!is.na(merged_obj@meta.data$subcluster), 
+                                        merged_obj@meta.data$subcluster, 
+                                        merged_obj@meta.data$cell_type)
+
+merged_obj@meta.data$cell_type <- merged_obj@meta.data$cell_type2
+merged_obj@meta.data$cell_type2 <- NULL
+```
+
+```{r}
+DimPlot(merged_obj, group.by = "cell_type", label=T) + ggtitle("merged")
+
+```
+##Subcluster T cells
+```{r}
+t <- subset(merged_obj, cell_type %in% c("T")) 
+DefaultAssay(t) <- "SCT"
+```
+```{r}
+t <- RunPCA(t, npcs = 30, features = rownames(merged_obj))
+t <- RunUMAP(t, dims = 1:30)
+t <- FindNeighbors(t, reduction = "pca", dims = 1:30)
+t <- FindClusters(t, resolution = 0.2)
+```
+
+```{r, fig.height=15, fig.width=15}
+markers <- FindAllMarkers(t, only.pos = TRUE, min.pct = 0.2, assay = "RNA") 
+top15 <- markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
+
+DoHeatmap(t, features = c(unique(top15$gene)), draw.line=T, label=T) + 
+       theme(axis.text.y=element_text(size = 15)) #+ scale_fill_gradient(colors = c("blue", "white", "red")))
+```
+
+```{r}
+t@meta.data <- mutate(t@meta.data, cell_type2 = case_when(seurat_clusters %in% c(0)~ "T-FH",
+                                                         seurat_clusters %in% c(1)~ "T-REG",
+                                                         seurat_clusters %in% c(2)~ "T-TOX",
+                                                         seurat_clusters %in% c(3)~ "T-H"))
+
+DimPlot(t, group.by = "cell_type2")
+FeaturePlot(t, features = "CD8A")
+FeaturePlot(t, features = "CD4")
+FeaturePlot(t, features = "CXCR5")
+
+```
+
+##Rename T clusters in original object
+```{r}
+#Extract cell names that belong to the clusters of interest
+tox_new <- rownames(t@meta.data[which(t@meta.data$seurat_clusters %in% c(2)), ])
+reg_new <- rownames(t@meta.data[which(t@meta.data$seurat_clusters %in% c(1)), ])
+fh_new <- rownames(t@meta.data[which(t@meta.data$seurat_clusters %in% c(0)), ])
+h_new <- rownames(t@meta.data[which(t@meta.data$seurat_clusters %in% c(3)), ])
+
+#Define their new name
+tox_new_name <- rep("T-TOX", length(tox_new))
+names(tox_new_name) <- tox_new
+
+reg_new_name <- rep("T-REG", length(reg_new))
+names(reg_new_name) <- reg_new
+
+fh_new_name <- rep("T-FH", length(fh_new))
+names(fh_new_name) <- fh_new
+
+h_new_name <- rep("T-H", length(h_new))
+names(h_new_name) <- h_new
+
+#If you have more than 1 subclusters renamed, you need to merge 
+rename_subclusters <-  c(tox_new_name, reg_new_name, fh_new_name, h_new_name)
+
+#Add metadata information to object
+merged_obj <- AddMetaData(merged_obj, 
+                        metadata = rename_subclusters, 
+                        col.name = "subcluster")
+merged_obj@meta.data$cell_type2 <- ifelse(!is.na(merged_obj@meta.data$subcluster), 
+                                        merged_obj@meta.data$subcluster, 
+                                        merged_obj@meta.data$cell_type)
+
+merged_obj@meta.data$cell_type <- merged_obj@meta.data$cell_type2
+merged_obj@meta.data$cell_type2 <- NULL
+```
+
+##Tidy annotation
+```{r}
+merged_obj@meta.data <- mutate(merged_obj@meta.data, cell_type_binned = case_when(cell_type %in% c("FL-B prol", "FL-B")~ "FL-B",
+                                                         cell_type %in% c("DLBCL-B prol", "DLBCL-B")~ "DLBCL-B",
+                                                         cell_type %in% c("T-TOX")~ "T-TOX",
+                                                         cell_type %in% c("T-REG")~ "T-REG",
+                                                         cell_type %in% c("T-H")~ "T-H",
+                                                         cell_type %in% c("T-FH")~ "T-FH",
+                                                         cell_type %in% c("Myeloid")~ "Myeloid",
+                                                         cell_type %in% c("FRC")~ "FRC",
+                                                         cell_type %in% c("rFRC")~ "rFRC",
+                                                         cell_type %in% c("BEC")~ "BEC",
+                                                         cell_type %in% c("FDC")~ "FDC"))
+
+```
+
+#Save
+```{r}
+saveRDS(merged_obj, "/g/huber/users/czernilo/proj/2021_LNS012/xenium/xenium_merged_seurat.rds")
+```
+
+#Figure DimPlot
+```{r Panel B left, fig.height=8, fig.width=12}
+data <- Embeddings(object = merged_obj[["umap"]])[(colnames(merged_obj)), c(1, 2)]
+data <- as.data.frame(data)
+data$cell_type_binned <- merged_obj$cell_type_binned
+data$Type_binned <- merged_obj$type
+data$cell_type_binned <- merged_obj$cell_type_binned
+
+col_vec_umap <- annotation_colors$Clusters_paper
+
+col_vec <-  unlist(lapply(data$cell_type_binned, function(x){index=which(x==names(col_vec_umap))
+col_vec_umap[index]}))
+data$color_patient <- col_vec
+
+levels = c("FL-B", "DLBCL-B", "T-H", "T-FH", "T-REG", "T-TOX", "Myeloid", "BEC", "FDC", "FRC", "rFRC")
+data$cell_type_binned <- factor(x = data$cell_type_binned, levels = levels) #change order of factor levels for better visualization
+```
+
+
+```{r Panel B left, fig.height=8, fig.width=12, fig.cap="UMAP of RNA sequencing data"}
+pdf(paste0(out_dir_figs, "xenium_umap.pdf"), width =7, height = 7)
+ggplot(data,aes(umap_1, umap_2)) + 
+  ggforce::geom_voronoi_tile(aes(fill = cell_type_binned, group = -1L), max.radius =0.05) +
+  theme_void()+
+  theme(legend.position = "bottom")+ 
+  scale_fill_manual(values= col_vec) 
+dev.off()
+```
+
+#Subcluster FDC/FRC/rFRC (not shown, exclude code)
+```{r}
+frc <- subset(merged_obj, cell_type %in% c("FRC", "rFRC", "FDC")) 
+DefaultAssay(frc) <- "SCT"
+```
+```{r}
+frc <- RunPCA(frc, npcs = 30, features = rownames(merged_obj))
+frc <- RunUMAP(frc, dims = 1:30)
+frc <- FindNeighbors(frc, reduction = "pca", dims = 1:30)
+frc <- FindClusters(frc, resolution = 0.2)
+```
+
+##UMAP FRC paper
+```{r}
+levels <- c("FDC", "FRC", "rFRC")
+cols <- c("#088B1A", "#BEDEA6", "#2AC200")
+
+dim <- DimPlot(frc, group.by = "cell_type_binned", label = F, label.box = F, repel = F, cols = cols, raster = F, pt.size = 1) + theme(legend.position="right")
+dim$data$cell_type_binned <- factor(x = dim$data$cell_type_binned, levels = levels) #change order of factor levels for better visualization
+
+pdf(paste0(out_dir_figs, "xenium_frc_umap.pdf"), width = 7, height = 5)
+dim
+dev.off()
+```
+
+```{r}
+frc@meta.data$type <- factor(frc@meta.data$type, levels = c("FL", "DLBCL"))
+
+pdf(paste0(out_dir_figs, "xenium_frc_homeo_vln.pdf"), width = 4, height = 4)
+VlnPlot(frc, features = "homeo_score2", group.by = "type", pt.size = 0, y.max = 5.5) +
+      #stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", ref.group = ".all.", hide.ns = FALSE)
+      geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
+      geom_hline(yintercept = mean(frc$homeo_score2), linetype = 2) + # Add horizontal line at base mean
+      #scale_y_continuous(limits=c(-1, 3.5), breaks=c(-1,0,1,2,3))+
+      labs(title = "Homeostatic chemokines", x = "", y = "Module Score\n") +
+      theme(plot.title = element_text(size = 15, color = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_rect(color = "black"), 
+            aspect.ratio=1.5,
+            axis.text.y = element_text(size = 12, color = "black"),
+            axis.title.x = element_blank(),
+            axis.title.y = element_text(size = 15, color = "black"), 
+            axis.text.x = element_text(size = 15, color = "black", angle = 0, hjust = 0.5)) + 
+      #scale_x_discrete(labels= c("NHL-associated", "healthy-associated")) +
+    scale_fill_manual(values=c("#8BCDE0", "#67B86E")) +
+      NoLegend()
+dev.off()
+```
+
+#Marker and chemokine expression across cell types
+##Violin
+```{r}
+chemokines <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11")
+
+levels = c("FL-B", "DLBCL-B", "T", "Myeloid", "BEC", "FRC", "FDC", "rFRC")
+merged_obj@meta.data$cell_type_binned <- factor(x = merged_obj@meta.data$cell_type_binned, levels = levels)
+
+VlnPlot(merged_obj, features= chemokines, group.by = "cell_type_binned", fill.by = "ident", pt.size = 0, stack = T, flip = T) + NoLegend() + xlab("") + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 12, face = "plain", margin = margin(5, 0, 0, 0)))
+
+```
+##Heatmaps
+```{r}
+markers <- c("CXCL13", "CXCL12", "CCL21", "CXCL9", "CXCL10", "CXCL11")
+Idents(merged_obj) <- "cell_type_binned"
+avg_expr <- AverageExpression(merged_obj, assays = "RNA", features = markers, return.seurat = F) 
+avg_expr <- as.data.frame(avg_expr[["RNA"]]) 
+
+#Reorder
+avg_expr <- avg_expr[,  c("FDC", "FRC", "rFRC", "BEC", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H", "FL-B", "DLBCL-B")]
+avg_expr <- avg_expr[c("CXCL13", "CXCL12", "CCL21", "CXCL9", "CXCL10", "CXCL11"),]
+
+#Change rownames
+#rownames(mat_scores_reclust) <- c("ABEC", "caBEC", "aBEC", "tBEC", "cBEC", "caHEV", "aHEV", "hHEV", "CXCL10-HEV", "VBEC")
+
+#Scale
+scaled_avg_expr <- scale(t(avg_expr))
+#scaled_avg_expr <- t(scaled_avg_expr)
+```
+```{r, fig.height=10, fig.width=10}
+#pdf(paste0(out_dir_figs, "xenium_chemokine_heatmap.pdf"), width = 5, height = 5)
+h2 <- Heatmap(scaled_avg_expr, 
+        cluster_columns = F, 
+        cluster_rows = F,
+        #col = rev(brewer.pal(n = 8, name = 'RdBu')),
+        col = circlize::colorRamp2(c(-2, 0, 2), c("#007EA7", "white", "#AD2E24")),
+        heatmap_legend_param = list(
+          title = "Scaled expression", 
+          color_bar = "continuous",
+          at = c(-2, 0, 2),
+          legend_direction = "horizontal", 
+          title_gp = gpar(fontsize = 10, fontface = "bold")),
+        width = ncol(scaled_avg_expr)*unit(5, "mm"), 
+        height = nrow(scaled_avg_expr)*unit(5, "mm"), 
+        row_names_gp = grid::gpar(fontsize = 10),
+        column_names_gp = grid::gpar(fontsize = 10),
+        rect_gp = gpar(col = "black", lwd = 1),
+        column_dend_height = unit(10, "mm"),
+        row_dend_width = unit(10, "mm")
+        )
+#dev.off()
+```
+
+```{r}
+markers <- c("CR2", "PDGFRB", "THY1", "PECAM1", "ITGAX", "CD14", "CD163", "CD8A", "FOXP3", "ICOS", "CXCR5", "TCF7", "TRBC2", "CD19")
+Idents(merged_obj) <- "cell_type_binned"
+avg_expr <- AverageExpression(merged_obj, assays = "RNA", features = markers, return.seurat = F) 
+avg_expr <- as.data.frame(avg_expr[["RNA"]]) 
+
+#Reorder
+avg_expr <- avg_expr[,  c("FDC", "FRC", "rFRC", "BEC", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H", "FL-B", "DLBCL-B")]
+avg_expr <- avg_expr[c("CR2", "PDGFRB", "THY1", "PECAM1", "ITGAX", "CD14", "CD163", "CD8A", "FOXP3", "ICOS", "CXCR5", "TCF7", "TRBC2", "CD19"),]
+
+#Scale
+scaled_avg_expr <- scale(t(avg_expr))
+```
+
+```{r, fig.height=10, fig.width=10}
+h1 <- Heatmap(t(scaled_avg_expr), 
+        cluster_columns = F, 
+        cluster_rows = F,
+        #col = rev(brewer.pal(n = 8, name = 'RdBu')),
+        col = circlize::colorRamp2(c(-2, 0, 2), c("#007EA7", "white", "#AD2E24")),
+        heatmap_legend_param = list(
+          title = "Scaled expression", 
+          color_bar = "continuous",
+          at = c(-2, 0, 2),
+          legend_direction = "horizontal", 
+          title_gp = gpar(fontsize = 10, fontface = "bold")),
+        width = ncol(scaled_avg_expr)*unit(5, "mm"), 
+        height = nrow(scaled_avg_expr)*unit(5, "mm"), 
+        row_names_gp = grid::gpar(fontsize = 10),
+        column_names_gp = grid::gpar(fontsize = 10),
+        rect_gp = gpar(col = "black", lwd = 1),
+        column_dend_height = unit(10, "mm"),
+        row_dend_width = unit(10, "mm")
+        )
+```
+
+```{r}
+pdf(paste0(out_dir_figs, "xenium_chemokine_marker_heatmap.pdf"), width = 8, height = 8)
+h1 + h2
+dev.off()
+```
+
+#Stacked bar plot FRCs
+```{r}
+# Subset metadata for relevant cell types
+meta_df <- as.data.frame(merged_obj@meta.data) %>%
+  filter(cell_type_binned %in% c("FDC", "FRC", "rFRC"))
+
+# Count total number of cells per cell type and disease type
+cell_counts <- meta_df %>%
+  group_by(cell_type_binned, type) %>%
+  summarise(count = n(), .groups = "drop")  # Absolute cell count
+
+# Compute proportions for relative comparison
+cell_counts <- cell_counts %>%
+  group_by(type) %>%
+  mutate(proportion = count / sum(count))  # Normalize within each disease type
+
+# Convert factors for ordered plotting
+cell_counts$cell_type_binned <- factor(cell_counts$cell_type_binned, levels = c("FDC", "FRC", "rFRC"))
+cell_counts$type <- factor(cell_counts$type, levels = c("FL", "DLBCL"))
+```
+
+```{r}
+ggplot(cell_counts, aes(x = type, y = count, fill = cell_type_binned)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +  # Side-by-side bars
+  scale_fill_manual(values = c("#1f78b4", "#33a02c", "#e31a1c")) +  # Custom colors
+  theme_bw() +
+  labs(title = "Absolute Cell Numbers per Type",
+       x = "Disease Type",
+       y = "Cell Count",
+       fill = "Cell Type") +
+  theme(plot.title = element_text(size = 15, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 14, color = "black"))
+```
+
+```{r}
+p1 <- ggplot(cell_counts, aes(x = type, y = proportion, fill = cell_type_binned)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.5) +  # Stacked proportions
+  scale_fill_manual(values = c("#088B1A", "#BEDEA6", "#2AC200")) + 
+  theme_bw() +
+  theme(plot.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(color = "black"), 
+        legend.position = "none",
+        aspect.ratio = 1.5,
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank())
+```
+
+#Percent positive cells (not shown, exclude code)
+##CXCL13
+```{r}
+# Define CXCL13+ status across all cell types
+RidgePlot(merged_obj, features="CXCL13")
+cxcl13_positive <- GetAssayData(merged_obj, assay = "RNA", slot = "data")["CXCL13", ] > 2
+merged_obj$CXCL13_status <- ifelse(cxcl13_positive, "CXCL13+", "CXCL13-")
+
+# Convert metadata to dataframe
+meta_df <- as.data.frame(merged_obj@meta.data)
+
+# Count total cells per `cell_type_binned`, `type`, and CXCL13 status
+cxcl13_summary <- meta_df %>%
+  group_by(cell_type_binned, type, CXCL13_status) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(cell_type_binned, type) %>%
+  mutate(proportion = count / sum(count))  # Compute proportion of CXCL13+ cells per type
+
+# Order factors for consistency
+cxcl13_summary$type <- factor(cxcl13_summary$type, levels = c("FL", "DLBCL"))
+cxcl13_summary$cell_type_binned <- factor(cxcl13_summary$cell_type_binned, 
+                                          levels = c("FDC", "FRC", "rFRC", "BEC", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H", "FL-B", "DLBCL-B"))
+```
+
+```{r}
+ggplot(cxcl13_summary, aes(x = type, y = proportion, fill = CXCL13_status)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.5) +  # Stacked proportions
+  #scale_fill_manual(values = c("#088B1A", "#BEDEA6", "#2AC200")) + 
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(color = "black"), 
+        aspect.ratio = 1.5,
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 12, color = "black", angle = 45, hjust = 1))
+```
+
+```{r}
+ggplot(cxcl13_summary, aes(x = type, y = proportion, fill = CXCL13_status)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.6) +  # Stacked proportions
+  scale_fill_manual(values = c("#f9f9f9", "#AD2E24")) +  # Custom colors
+  theme_bw() +
+  facet_wrap(~ cell_type_binned, scales = "free_y") +  # Facet by cell type
+  theme(plot.title = element_text(size = 15, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(color = "black"), 
+        aspect.ratio = 1.5,
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 12, color = "black", angle = 45, hjust = 1)) +
+  labs(fill = "CXCL13 Status", title = "CXCL13+ Proportion Across Cell Types")
+```
+
+##CXCL9
+```{r}
+# Define CXCL9+ status across all cell types
+RidgePlot(merged_obj, features="CXCL9")
+cxcl9_positive <- GetAssayData(merged_obj, assay = "RNA", slot = "data")["CXCL9", ] > 2
+merged_obj$CXCL9_status <- ifelse(cxcl9_positive, "CXCL9+", "CXCL9-")
+
+# Convert metadata to dataframe
+meta_df <- as.data.frame(merged_obj@meta.data)
+
+# Count total cells per `cell_type_binned`, `type`, and CXCL9 status
+cxcl9_summary <- meta_df %>%
+  group_by(cell_type_binned, type, CXCL9_status) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(cell_type_binned, type) %>%
+  mutate(proportion = count / sum(count))  # Compute proportion of CXCL9+ cells per type
+
+# Order factors for consistency
+cxcl9_summary$type <- factor(cxcl9_summary$type, levels = c("FL", "DLBCL"))
+cxcl9_summary$cell_type_binned <- factor(cxcl9_summary$cell_type_binned, 
+                                          levels = c("FDC", "FRC", "rFRC", "BEC", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H", "FL-B", "DLBCL-B"))
+```
+
+```{r}
+ggplot(cxcl9_summary, aes(x = type, y = proportion, fill = CXCL9_status)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.6) +  # Stacked proportions
+  scale_fill_manual(values = c("#f9f9f9", "#AD2E24")) +  # Custom colors
+  theme_bw() +
+  facet_wrap(~ cell_type_binned, scales = "free_y") +  # Facet by cell type
+  theme(plot.title = element_text(size = 15, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(color = "black"), 
+        aspect.ratio = 1.5,
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(size = 12, color = "black", angle = 45, hjust = 1)) +
+  labs(fill = "CXCL9 Status")
+```
+
+#Chemokine expression
+##CXCL13
+```{r}
+chemokines <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11")
+
+frc@meta.data$cell_type_binned <- factor(x = frc@meta.data$cell_type_binned, levels = c("FDC", "FRC", "rFRC"))
+frc@meta.data$type <- factor(x = frc@meta.data$type, levels = c("FL", "DLBCL"))
+comparisons <- list(c("FL", "DLBCL"))
+
+VlnPlot(frc, features= chemokines, group.by = "cell_type_binned", fill.by = "ident", pt.size = 0, stack = T, flip = T) + NoLegend() + xlab("") + theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 12, face = "plain", margin = margin(5, 0, 0, 0)))
+
+p2 <- VlnPlot(frc, features = "CXCL13", group.by = "type", fill.by = "cell_type_binned", pt.size = 0, y.max = 8) +
+      stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", ref.group = ".all.", hide.ns = FALSE) +
+      geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
+      #geom_hline(yintercept = mean(frc@assays$RNACXCL13), linetype = 2) + # Add horizontal line at base mean
+      ggtitle("CXCL13") + 
+      #scale_y_continuous(limits=c(-0.4, 1.2), breaks=c(-0.3,0,0.3,0.6,0.9))+
+      theme(plot.title = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_rect(color = "black"), 
+            aspect.ratio=1,
+            axis.text.y = element_text(size = 12, color = "black"),
+            axis.title.x = element_blank(),
+            #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size = 12, color = "black", angle = 0, hjust = 0.5)) + 
+      #scale_x_discrete(labels= c("NHL-associated", "healthy-associated")) +
+      scale_fill_manual(values = c("#8BCDE0", "#67B86E")) +
+      NoLegend()
+```
+
+```{r}
+pdf(paste0(out_dir_figs, "xenium_frc_cxcl13_bar.pdf"), width = 2, height = 4)
+cowplot::plot_grid(p1, p2, nrow = 2, ncol = 1)
+dev.off()
+```
+
+##Scored
+```{r}
+ifn_score <- c("CXCL9", "CXCL10", "CXCL11")
+homeo_score <- c("CXCL13", "CXCL12", "CCL21")
+comparisons <- list(c("FL", "DLBCL"))
+
+scores <- list()
+scores[[1]] <- ifn_score
+scores[[2]] <- homeo_score
+
+DefaultAssay(frc) <- "RNA"
+frc <- AddModuleScore(object = frc, features = scores, ctrl = 5, name = c("ifn_score", "homeo_score"))
+frc[['Scores']] <- CreateAssayObject(data = t(x = FetchData(object = frc, vars = c("ifn_score1", "homeo_score2"))))
+frc@assays$Scores
+```
+
+```{r}
+subset(frc, cell_type_binned %in% c("FRC")) %>% 
+VlnPlot(features = "ifn_score1", group.by = "type", pt.size = 0, y.max = 2.2) +
+      stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", ref.group = ".all.", hide.ns = FALSE) +
+      geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
+      geom_hline(yintercept = mean(frc$ifn_score1), linetype = 2) + # Add horizontal line at base mean
+      ggtitle("Homeo") + 
+      #scale_y_continuous(limits=c(-0.4, 1.2), breaks=c(-0.3,0,0.3,0.6,0.9))+
+      theme(plot.title = element_text(size = 15, color = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_rect(color = "black"), 
+            aspect.ratio=1,
+            axis.text.y = element_text(size = 12, color = "black"),
+            axis.title.x = element_blank(),
+            #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size = 15, color = "black", angle = 0, hjust = 0.5)) + 
+      labs(x = "", y = "Module Score\n") +
+      #scale_x_discrete(labels= c("NHL-associated", "healthy-associated")) +
+      scale_fill_manual(values = c("#8BCDE0", "#67B86E")) +
+      NoLegend()
+
+VlnPlot(frc, features = "homeo_score2", group.by = "type", pt.size = 0, y.max = 2.2) +
+      stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", ref.group = ".all.", hide.ns = FALSE) +
+      geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
+      geom_hline(yintercept = mean(comparisons$homeo_score2), linetype = 2) + # Add horizontal line at base mean
+      ggtitle("Homeo") + 
+      #scale_y_continuous(limits=c(-0.4, 1.2), breaks=c(-0.3,0,0.3,0.6,0.9))+
+      theme(plot.title = element_text(size = 15, color = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_rect(color = "black"), 
+            aspect.ratio=1,
+            axis.text.y = element_text(size = 12, color = "black"),
+            axis.title.x = element_blank(),
+            #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size = 15, color = "black", angle = 0, hjust = 0.5)) + 
+      labs(x = "", y = "Module Score\n") +
+      #scale_x_discrete(labels= c("NHL-associated", "healthy-associated")) +
+      scale_fill_manual(values = c("#8BCDE0", "#67B86E")) +
+      NoLegend()
+```
+
+#Visualize chemokines in space
+##FL
+```{r}
+fl <- subset(merged_obj, type %in% c("FL"))
+genes <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11", "CCR7", "CR2", "CR1", "PDGFRB", "THY1", "CXCR3")
+metadata_fl <- as.data.frame(fl@meta.data)
+DefaultAssay(fl) <- "RNA"
+fl_df <-  cbind(metadata_fl, FetchData(fl, genes))
+unique(fl_df$cell_type_binned)
+```
+
+###Cell types
+```{r}
+pdf(paste0(out_dir_figs, "xenium_fl_celltypes_full_spatial.pdf"), width = 4, height = 4)
+ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  # Plot the background points with #f0f0f0
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("BEC", "DLBCL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 0.25, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(fl_df, cell_type_binned == "FL-B"),
+             aes(alpha = 0), size = 0.25, color = "#0EBCE8") +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.25) +
+  
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "DLBCL-B" = "#f0f0f0",
+    "FL-B" = "#0EBCE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"))
+dev.off()
+```
+
+```{r}
+pdf(paste0(out_dir_figs, "xenium_fl_celltypes_zoom_spatial.pdf"), width = 4, height = 4)
+ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("BEC", "DLBCL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 0.5, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(fl_df, cell_type_binned == "FL-B"),
+             aes(alpha = 0.5), size = 0.5) +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.5) +
+  
+  theme_bw() +
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "DLBCL-B" = "#f0f0f0",
+    "FL-B" = "#0EBCE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"
+  )) +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(2600, 3100) +
+  ylim(4100, 4600) 
+dev.off()
+```
+```{r}
+pdf(paste0(out_dir_figs, "xenium_fl_celltypes_zoom_spatial_legend.pdf"), width = 4, height = 4)
+ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("BEC", "DLBCL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 1, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(fl_df, cell_type_binned == "FL-B"),
+             aes(alpha = 0.8), size = 1) +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 1) +
+  
+  theme_bw() +
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "DLBCL-B" = "#f0f0f0",
+    "FL-B" = "#0EBCE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"
+  )) +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(2600, 3100) +
+  ylim(4100, 4600) 
+dev.off()
+```
+
+###Expression
+```{r}
+fl_df <- fl_df %>%
+  mutate(CCR7_order = ifelse(CCR7 > 1, 1, 0)) %>% 
+  mutate(CR2_order = ifelse(CR2 > 1, 1, 0)) %>% 
+  mutate(THY1_order = ifelse(THY1 > 1, 1, 0)) %>%
+  mutate(PDGFRB_order = ifelse(PDGFRB > 1, 1, 0)) %>%
+  mutate(CXCL13_order = ifelse(CXCL13 > 1, 1, 0))  %>%
+  mutate(CXCR3_order = ifelse(CXCR3 > 1, 1, 0))  %>%
+  mutate(CXCL9_order = ifelse(CXCL9 > 1, 1, 0))  %>%
+  mutate(CXCL10_order = ifelse(CXCL10 > 1, 1, 0))  %>%
+  mutate(CXCL11_order = ifelse(CXCL11 > 1, 1, 0))  %>%
+  mutate(CXCL12_order = ifelse(CXCL12 > 1, 1, 0))  %>%
+  mutate(CCL21_order = ifelse(CCL21 > 1, 1, 0))
+```
+
+```{r}
+p2 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL13)) +
+  geom_point(data = subset(fl_df, CXCL13_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(fl_df, CXCL13_order == 1),
+             size = 0.5, aes(color = CXCL13), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1) +
+  xlim(2600, 3100) +
+  ylim(4100, 4600)
+
+p3 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL12)) +
+  geom_point(data = subset(fl_df, CXCL12_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(fl_df, CXCL12_order == 1),
+             size = 0.5, aes(color = CXCL12), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1) +
+  xlim(2600, 3100) +
+  ylim(4100, 4600)
+
+p4 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CCL21)) +
+  geom_point(data = subset(fl_df, CCL21_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(fl_df, CCL21_order == 1),
+             size = 0.5, aes(color = CCL21), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1) +
+  xlim(2600, 3100) +
+  ylim(4100, 4600)
+
+p5 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCR3)) +
+  geom_point(data = subset(fl_df, CXCR3_order == 0),
+             size = 1, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(fl_df, CXCR3_order == 1),
+             size = 1, aes(color = CXCR3), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1) +
+  xlim(2600, 3100) +
+  ylim(4100, 4600)
+
+p6 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL9)) +
+  geom_point(data = subset(fl_df, CXCL9_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(fl_df, CXCL9_order == 1),
+             size = 0.5, aes(color = CXCL9), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1) +
+  xlim(2600, 3100) +
+  ylim(4100, 4600)
+
+```
+
+```{r, fig.height=10, fig.width=10}
+pdf(paste0(out_dir_figs, "xenium_fl_expression_zoom_spatial.pdf"), width = 8, height = 8)
+cowplot::plot_grid(#p1, p3, p5,
+                   p2, p3, p4, p6, 
+                   ncol = 2, nrow = 2)
+dev.off()
+```
+
+##DLBCL
+```{r}
+dlbcl <- subset(merged_obj, type %in% c("DLBCL"))
+genes <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11", "CCR7", "CR2", "CR1", "PDCD1", "CD8A", "THY1", "CXCR3", "IFNG")
+metadata_dlbcl <- as.data.frame(dlbcl@meta.data)
+DefaultAssay(dlbcl) <- "RNA"
+dlbcl_df <-  cbind(metadata_dlbcl, FetchData(dlbcl, genes))
+unique(dlbcl_df$cell_type_binned)
+```
+
+###Cell types
+```{r}
+pdf(paste0(out_dir_figs, "xenium_dlbcl_celltypes_full_spatial.pdf"), width = 4, height = 4)
+ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  # Plot the background points with #f0f0f0
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("BEC", "FL-B", "Myeloid", "T")),
+             aes(alpha = 1), size = 0.25, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(dlbcl_df, cell_type_binned == "DLBCL-B"),
+             aes(alpha = 0), size = 0.25, color = "#83CAE8") +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.25) +
+  
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "FL-B" = "#f0f0f0",
+    "DLBCL-B" = "#83CAE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+dev.off()
+```
+```{r}
+pdf(paste0(out_dir_figs, "xenium_dlbcl_celltypes_full_spatial_legend.pdf"), width = 4, height = 4)
+ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  # Plot the background points with #f0f0f0
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("BEC", "FL-B", "Myeloid", "T")),
+             aes(alpha = 1), size = 1, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(dlbcl_df, cell_type_binned == "DLBCL-B"),
+             aes(alpha = 0), size = 1, color = "#83CAE8") +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 1) +
+  
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "FL-B" = "#f0f0f0",
+    "DLBCL-B" = "#83CAE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"))+
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+dev.off()
+```
+
+```{r}
+pdf(paste0(out_dir_figs, "xenium_dlbcl_celltypes_zoom_spatial.pdf"), width = 4, height = 4)
+ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("BEC", "FL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 0.5, color = "#f0f0f0") +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(dlbcl_df, cell_type_binned == "DLBCL-B"),
+             aes(alpha = 0.5), size = 0.5) +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.5) +
+  
+  theme_bw() +
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T" = "#f0f0f0",
+    "FL-B" = "#f0f0f0",
+    "DLBCL-B" = "#83CAE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"
+  )) +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(800, 1300) +
+  ylim(4100, 4600)
+dev.off()
+```
+
+###Expression
+```{r}
+dlbcl_df <- dlbcl_df %>%
+  mutate(CCR7_order = ifelse(CCR7 > 1, 1, 0)) %>% 
+  mutate(CR2_order = ifelse(CR2 > 4, 1, 0)) %>% 
+  mutate(THY1_order = ifelse(THY1 > 1, 1, 0)) %>%
+  mutate(CXCL13_order = ifelse(CXCL13 > 2, 1, 0))  %>%
+  mutate(CXCR3_order = ifelse(CXCR3 > 0, 1, 0))  %>%
+  mutate(CXCL9_order = ifelse(CXCL9 > 1, 1, 0))  %>%
+  mutate(CD8A_order = ifelse(CD8A > 1, 1, 0))  %>%
+  mutate(PDCD1_order = ifelse(PDCD1 > 1, 1, 0))  %>%
+  mutate(CXCL10_order = ifelse(CXCL10 > 1, 1, 0))  %>%
+  mutate(CXCL11_order = ifelse(CXCL11 > 1, 1, 0))  %>%
+  mutate(CXCL12_order = ifelse(CXCL12 > 1, 1, 0))  %>%
+  mutate(CCL21_order = ifelse(CCL21 > 1, 1, 0))
+```
+
+```{r}
+p4 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CCL21)) +
+  geom_point(data = subset(dlbcl_df, CCL21_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(dlbcl_df, CCL21_order == 1),
+             size = 0.5, aes(color = CCL21), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(1000, 1500) +
+  ylim(4000, 4500)
+
+p3 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL12)) +
+  geom_point(data = subset(dlbcl_df, CXCL12_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(dlbcl_df, CXCL12_order == 1),
+             size = 0.5, aes(color = CXCL12), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(1000, 1500) +
+  ylim(4000, 4500)
+  
+p2 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL13)) +
+  geom_point(data = subset(dlbcl_df, CXCL13_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(dlbcl_df, CXCL13_order == 1),
+             size = 0.5, aes(color = CXCL13), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(1000, 1500) +
+  ylim(4000, 4500)
+
+p6 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = CXCL9)) +
+  geom_point(data = subset(dlbcl_df, CXCL9_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.7) +
+    geom_point(data = subset(dlbcl_df, CXCL9_order == 1),
+             size = 0.5, aes(color = CXCL9), alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)+
+  xlim(1000, 1500) +
+  ylim(4000, 4500)
+
+
+```
+
+```{r, fig.height=10, fig.width=10}
+pdf(paste0(out_dir_figs, "xenium_dlbcl_expression_zoom_spatial.pdf"), width = 8, height = 8)
+cowplot::plot_grid(#p1, p3, p5,
+                   p2, p3, p4, p6, 
+                   ncol = 2, nrow = 2)
+dev.off()
+```
+
+##CXCL13 overview (Fig. 2)
+```{r}
+fl_df <- mutate(fl_df, cell_type_fdc = case_when(
+  cell_type_binned %in% c("FDC")~"FDC",
+  cell_type_binned %in% c("FL-B", "T-FH", "FRC", "Myeloid", "T-REG", "T-TOX", "T-H", "rFRC", "DLBCL-B", "BEC")~"Other"))
+```
+
+```{r}
+# Define color mapping for discrete groups
+color_map <- c("Other" = "#f0f0f0", "FDC" = "#088B1A")
+
+p1 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y)) +
+  
+  # Background cells in light grey
+  geom_point(data = subset(fl_df, cell_type_fdc == "Other"), 
+             aes(color = "Other"), size = 0.5, alpha = 0.1) +
+  
+  # FDC cells in distinct color
+  geom_point(data = subset(fl_df, cell_type_fdc == "FDC"), 
+             aes(color = "FDC"), size = 1, alpha = 1) +
+  
+  # CXCL13 expression using fill
+  geom_point(data = subset(fl_df, CXCL13_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 1) +
+  
+  # CXCL13 expression with color distinction for FDC vs non-FDC cells
+  geom_point(data = subset(fl_df, CXCL13_order == 1),
+             aes(fill = CXCL13, color = ifelse(cell_type_fdc == "FDC", "FDC", "Other")), 
+             size = 1, alpha = 1, shape = 21) +
+  
+  # Color scale for discrete groups
+  scale_color_manual(values = color_map, na.value = NA) + 
+
+  # Fill scale for CXCL13
+  scale_fill_gradientn(colors = c("#f9f9f9", "#AD2E24"), guide = "colorbar") +
+
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+```
+
+```{r}
+dlbcl_df <- mutate(dlbcl_df, cell_type_fdc = case_when(
+  cell_type_binned %in% c("FDC")~"FDC",
+  #cell_type_binned %in% c("T-TOX")~"T-TOX"
+  cell_type_binned %in% c("FL-B", "T-FH", "FRC", "T-TOX", "Myeloid", "T-REG", "T-H", "rFRC", "DLBCL-B", "BEC")~"Other"))
+```
+
+```{r}
+# Define color mapping for discrete groups
+color_map <- c("Other" = "#f9f9f9", 
+               #"T-TOX" = "mediumpurple1", 
+               "FDC" = "#088B1A")
+
+p2 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y)) +
+  
+  # Background cells in light grey
+  geom_point(data = subset(dlbcl_df, cell_type_fdc == "Other"), 
+             aes(color = "Other"), size = 0.5, alpha = 0.1) +
+  
+  # FDC cells in distinct color
+  geom_point(data = subset(dlbcl_df, cell_type_fdc == "FDC"), 
+             aes(color = "FDC"), size = 1, alpha = 1) +
+
+  #geom_point(data = subset(dlbcl_df, cell_type_fdc == "T-TOX"), 
+  #           aes(color = "T-TOX"), size = 2, alpha = 1) +
+  
+  # CXCL13 expression using fill
+  geom_point(data = subset(dlbcl_df, CXCL13_order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 1) +
+  
+  # CXCL13 expression with color distinction for FDC vs non-FDC cells
+  geom_point(data = subset(dlbcl_df, CXCL13_order == 1),
+             aes(fill = CXCL13, color = ifelse(cell_type_fdc %in% "FDC", "FDC", "Other")), 
+             size = 1, alpha = 1, shape = 21) +
+  
+  # Color scale for discrete groups
+  scale_color_manual(values = color_map, na.value = NA) + 
+
+  # Fill scale for CXCL13
+  scale_fill_gradientn(colors = c("#f9f9f9", "#AD2E24"), guide = "colorbar") +
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+
+```
+```{r}
+pdf(paste0(out_dir_figs, "xenium_fdc_cxcl13_spatial.pdf"), width = 8, height = 4)
+cowplot::plot_grid(p1, p2, ncol = 2)
+dev.off()
+```
+
+##CXCL13+ T cells (not shown)
+```{r}
+dlbcl_df <- mutate(dlbcl_df, cell_type_ttox = case_when(
+  cell_type_binned %in% c("T-TOX")~"T-TOX",
+  cell_type_binned %in% c("FL-B", "T-FH", "FRC", "Myeloid", "T-REG", "T-H", "rFRC", "DLBCL-B", "BEC", "FDC")~"Other"))
+
+dlbcl_df <- dlbcl_df %>%
+  mutate(CXCL13_order = ifelse(CXCL13 > 3, 1, 0))  %>%
+  mutate(CD8A_order = ifelse(CD8A > 1, 1, 0))  %>%
+  mutate(PDCD1_order = ifelse(PDCD1 > 1, 1, 0)) 
+```
+
+```{r}
+# Define color mapping for discrete groups
+color_map <- c("Other" = "#f0f0f0", 
+               "T-TOX" = "mediumpurple1") 
+               #"FDC" = "#088B1A")
+
+ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y)) +
+
+    # Background cells in light grey
+  geom_point(data = subset(dlbcl_df, cell_type_ttox == "Other"), 
+             aes(color = "Other"), size = 0.5, alpha = 0.1) +
+  
+    # T cells in distinct color
+  geom_point(data = subset(dlbcl_df, cell_type_ttox == "T-TOX"), 
+             aes(color = "T-TOX"), size = 1, alpha = 1) +
+  
+  # CXCL13 expression using fill
+ # geom_point(data = subset(dlbcl_df, CXCL13_order == 0),
+#             size = 0.5, color = "#f9f9f9", alpha = 1) +
+  
+  # CXCL13 expression with color distinction for FDC vs non-FDC cells
+  #geom_point(data = subset(dlbcl_df, CXCL13_order == 1),
+  #           aes(fill = CXCL13, color = ifelse(cell_type_ttox %in% "T-TOX", "T-TOX", "Other")), 
+  #           size = 1, alpha = 1, shape = 21) +
+  
+  # Color scale for discrete groups
+  scale_color_manual(values = color_map, na.value = NA) + 
+
+  # Fill scale for CXCL13
+  scale_fill_gradientn(colors = c("#f9f9f9", "#AD2E24"), guide = "colorbar") +
+  theme_bw() +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+```
+
+#CXCR3+ T cells
+```{r}
+# Define CXCR3+ status across all cell types
+RidgePlot(subset(merged_obj, cell_type_binned %in% c("T-TOX")), features="CXCR3")
+cxcr3_positive <- GetAssayData(merged_obj, assay = "RNA", slot = "data")["CXCR3", ] > 2
+merged_obj$CXCR3_status <- ifelse(cxcr3_positive, "CXCR3+", "CXCR3-")
+
+# Define IFNG+ status across all cell types
+RidgePlot(subset(merged_obj, cell_type_binned %in% c("T-TOX")), features="IFNG")
+ifng_positive <- GetAssayData(merged_obj, assay = "RNA", slot = "data")["IFNG", ] > 2
+merged_obj$IFNG_status <- ifelse(ifng_positive, "IFNG+", "IFNG-")
+
+# Define CXCL9+ status across all cell types
+RidgePlot(merged_obj, features="CXCL9")
+cxcl9_positive <- GetAssayData(merged_obj, assay = "RNA", slot = "data")["CXCL9", ] > 2
+merged_obj$CXCL9_status <- ifelse(cxcl9_positive, "CXCL9+", "CXCL9-")
+```
+
+##Tidy data
+```{r}
+merged_obj@meta.data <- mutate(merged_obj@meta.data, cell_type_binned_cxcr3 = case_when(cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & CXCR3_status == "CXCR3+"~"CXCR3+ T",
+                                                      cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & CXCR3_status == "CXCR3-"~"CXCR3- T",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9+"~"CXCL9+ FRC",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9-"~"CXCL9- FRC",
+                                                      cell_type_binned %in% c("FL-B", "Myeloid", "FDC", "BEC", "DLBCL-B")~"Other"))
+unique(merged_obj@meta.data$cell_type_binned_cxcr3)
+
+merged_obj@meta.data <- mutate(merged_obj@meta.data, cell_type_binned_ifng = case_when(cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & IFNG_status == "IFNG+"~"IFNG+ T",
+                                                      cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & IFNG_status == "IFNG-"~"IFNG- T",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9+"~"CXCL9+ FRC",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9-"~"CXCL9- FRC",
+                                                      cell_type_binned %in% c("FL-B", "Myeloid", "FDC", "BEC", "DLBCL-B")~"Other"))
+unique(merged_obj@meta.data$cell_type_binned_ifng)
+```
+
+```{r}
+genes <- c("CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11", "CCR7", "CXCR3", "IFNG")
+metadata <- as.data.frame(merged_obj@meta.data)
+DefaultAssay(merged_obj) <- "RNA"
+merged_df <-  cbind(metadata, FetchData(merged_obj, genes))
+
+fl_df <- subset(merged_df, type %in% c("FL"))
+dlbcl_df <- subset(merged_df, type %in% c("DLBCL"))
+```
+
+##CXCL9-CXCR3 spatial plots
+```{r}
+p1 <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned_cxcr3)) +
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 %in% c("Other", "CXCR3- T", "CXCL9- FRC")),
+             aes(alpha = 1), size = 0.25, color = "#f0f0f0") +
+  
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 == "CXCR3+ T"),
+             aes(alpha = 1), size = 1, color = "mediumpurple1") +
+
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 == "CXCL9+ FRC"),
+             aes(alpha = 1), size = 1, color = "#2AC200") +
+
+  #scale_color_manual(values = c(
+  #  "Other" = "#f0f0f0",
+  #  "CXCR3- T" = "#f0f0f0",
+  #  "CXCR3+ T" = "mediumpurple1"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank()
+)
+```
+
+```{r}
+p2 <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned_cxcr3)) +
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 %in% c("Other", "CXCR3- T", "CXCL9- FRC")),
+             aes(alpha = 1), size = 0.25, color = "#f0f0f0") +
+  
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 == "CXCR3+ T"),
+             aes(alpha = 1), size = 1, color = "mediumpurple1") +
+
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 == "CXCL9+ FRC"),
+             aes(alpha = 1), size = 1, color = "#2AC200") +
+  #scale_color_manual(values = c(
+  #  "Other" = "#f0f0f0",
+  #  "CXCR3- T" = "#f0f0f0",
+  #  "CXCR3+ T" = "mediumpurple1"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank()
+)
+```
+
+##Density
+```{r}
+library(spatstat)
+```
+
+###FL
+```{r}
+cxcl9_pos_rfrc <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9+ FRC")
+cxcl9_neg_rfrc <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9- FRC")
+cxcr3_pos_t <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3+ T")
+#cxcr3_neg_t <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3- T")
+```
+
+```{r}
+# Convert coordinates into spatial point patterns (ppp format)
+buffer <- 100  # Increase buffer slightly
+
+x_min <- min(fl_df$nucleus_centroid_x) - buffer
+x_max <- max(fl_df$nucleus_centroid_x) + buffer
+y_min <- min(fl_df$nucleus_centroid_y) - buffer
+y_max <- max(fl_df$nucleus_centroid_y) + buffer
+
+window <- owin(xrange = c(x_min, x_max), yrange = c(y_min, y_max))
+print(window)
+
+# Convert cell positions to spatial point patterns
+cxcr3_pos_t_ppp <- ppp(cxcr3_pos_t$nucleus_centroid_x, cxcr3_pos_t$nucleus_centroid_y, window = window)
+cxcl9_pos_rfrc_ppp <- ppp(cxcl9_pos_rfrc$nucleus_centroid_x, cxcl9_pos_rfrc$nucleus_centroid_y, window = window)
+cxcl9_neg_rfrc_ppp <- ppp(cxcl9_neg_rfrc$nucleus_centroid_x, cxcl9_neg_rfrc$nucleus_centroid_y, window = window)
+
+# Perform Kernel Density Estimation (KDE) for CXCR3+ T cells
+sigma_value <- 50  # Adjust as needed
+cxcr3_pos_density <- density(cxcr3_pos_t_ppp, sigma = sigma_value)
+
+# Extract CXCR3+ T cell density at CXCL9+ and CXCL9- rFRC locations
+cxcr3_pos_at_cxcl9_pos_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_pos_rfrc_ppp))
+cxcr3_pos_at_cxcl9_neg_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_neg_rfrc_ppp))
+
+colnames(cxcr3_pos_at_cxcl9_pos_rfrc) <- "density"
+colnames(cxcr3_pos_at_cxcl9_neg_rfrc) <- "density"
+
+# Create a combined dataframe for both CXCL9+ FRC and CXCL9- FRC for comparison
+density_df <- rbind(
+  data.frame(density = cxcr3_pos_at_cxcl9_pos_rfrc$density, group = "CXCL9+ FRC"),
+  data.frame(density = cxcr3_pos_at_cxcl9_neg_rfrc$density, group = "CXCL9- FRC")
+)
+
+# Plot the comparison between CXCL9+ and CXCL9- FRCs
+density_df$group <- factor(density_df$group, levels = c("CXCL9+ FRC", "CXCL9- FRC"))
+p3 <- ggplot(density_df, aes(x = group, y = density)) +
+  geom_boxplot(aes(fill = group), outlier.shape = NA, width = 0.5, alpha = 0.7) +
+  #geom_jitter(shape = 16, position = position_jitter(0.2), alpha = 0.4) +
+  scale_fill_manual(values = c("#2AC200", "#f0f0f0")) + # Adjust the colors
+  ylab("CXCR3+ T Density")+
+  coord_flip()+
+  stat_compare_means(method = "wilcox.test", label = "p.signif", comp = list(c("CXCL9+ FRC", "CXCL9- FRC"))) +
+  theme_bw() +
+  theme(
+    plot.title = element_blank(),
+    plot.margin = margin(10, 10, 10, 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(color = "black"),
+    legend.position = "none",
+    aspect.ratio = 0.5,
+    axis.text.y = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black")
+  )
+```
+
+###DLBCL
+```{r}
+cxcl9_pos_rfrc <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9+ FRC")
+cxcl9_neg_rfrc <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9- FRC")
+cxcr3_pos_t <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3+ T")
+#cxcr3_neg_t <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3- T")
+```
+
+```{r}
+# Convert coordinates into spatial point patterns (ppp format)
+buffer <- 100  # Increase buffer slightly
+
+x_min <- min(dlbcl_df$nucleus_centroid_x) - buffer
+x_max <- max(dlbcl_df$nucleus_centroid_x) + buffer
+y_min <- min(dlbcl_df$nucleus_centroid_y) - buffer
+y_max <- max(dlbcl_df$nucleus_centroid_y) + buffer
+
+window <- owin(xrange = c(x_min, x_max), yrange = c(y_min, y_max))
+print(window)
+
+# Convert cell positions to spatial point patterns
+cxcr3_pos_t_ppp <- ppp(cxcr3_pos_t$nucleus_centroid_x, cxcr3_pos_t$nucleus_centroid_y, window = window)
+cxcl9_pos_rfrc_ppp <- ppp(cxcl9_pos_rfrc$nucleus_centroid_x, cxcl9_pos_rfrc$nucleus_centroid_y, window = window)
+cxcl9_neg_rfrc_ppp <- ppp(cxcl9_neg_rfrc$nucleus_centroid_x, cxcl9_neg_rfrc$nucleus_centroid_y, window = window)
+
+# Perform Kernel Density Estimation (KDE) for CXCR3+ T cells
+sigma_value <- 50  # Adjust as needed
+cxcr3_pos_density <- density(cxcr3_pos_t_ppp, sigma = sigma_value)
+
+# Extract CXCR3+ T cell density at CXCL9+ and CXCL9- rFRC locations
+cxcr3_pos_at_cxcl9_pos_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_pos_rfrc_ppp))
+cxcr3_pos_at_cxcl9_neg_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_neg_rfrc_ppp))
+
+colnames(cxcr3_pos_at_cxcl9_pos_rfrc) <- "density"
+colnames(cxcr3_pos_at_cxcl9_neg_rfrc) <- "density"
+
+# Create a combined dataframe for both CXCL9+ FRC and CXCL9- FRC for comparison
+density_df <- rbind(
+  data.frame(density = cxcr3_pos_at_cxcl9_pos_rfrc$density, group = "CXCL9+ FRC"),
+  data.frame(density = cxcr3_pos_at_cxcl9_neg_rfrc$density, group = "CXCL9- FRC")
+)
+
+# Plot the comparison between CXCL9+ and CXCL9- FRCs
+density_df$group <- factor(density_df$group, levels = c("CXCL9+ FRC", "CXCL9- FRC"))
+p4 <- ggplot(density_df, aes(x = group, y = density)) +
+  geom_boxplot(aes(fill = group), outlier.shape = NA, width = 0.5, alpha = 0.7) +
+  #geom_jitter(shape = 16, position = position_jitter(0.2), alpha = 0.4) +
+  scale_fill_manual(values = c("#2AC200", "#f0f0f0")) + # Adjust the colors
+  ylab("CXCR3+ T Density")+
+  coord_flip()+
+  stat_compare_means(method = "wilcox.test", label = "p.signif", comp = list(c("CXCL9+ FRC", "CXCL9- FRC"))) +
+  theme_bw() +
+  theme(
+    plot.title = element_blank(),
+    plot.margin = margin(10, 10, 10, 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(color = "black"),
+    legend.position = "none",
+    aspect.ratio = 0.5,
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black")
+  )
+```
+
+###Save plots
+```{r}
+pdf(paste0(out_dir_figs, "xenium_cxcr3t_cxcl9frc_spatial.pdf"), width = 6, height = 3)
+cowplot::plot_grid(p1, p2, ncol = 2)
+dev.off()
+
+pdf(paste0(out_dir_figs, "xenium_cxcr3t_cxcl9frc_box.pdf"), width = 8, height = 2)
+cowplot::plot_grid(p3, p4, ncol = 2)
+dev.off()
+```
