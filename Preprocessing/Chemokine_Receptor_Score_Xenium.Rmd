@@ -1,0 +1,279 @@
+---
+title: "Chemokine_Receptor_Score_Xenium"
+output: html_document
+date: "2025-03-04"
+---
+
+#Set wd
+```{r}
+setwd("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/")
+out_dir_obj <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/"
+out_dir_plots <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/"
+out_dir_de <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/"
+out_dir_figs <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/"
+out_dir_xenium <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/"
+```
+
+#Load libraries
+```{r}
+#library(aws.s3)
+library(Seurat)
+library(ggplot2)
+library(ggbeeswarm)
+library(ggpubr)
+
+#library(pheatmap)
+library(ComplexHeatmap)
+#library(dittoSeq)
+library(viridis)
+library(RColorBrewer)
+library(pals)
+#library(wesanderson)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(readxl)
+library(patchwork)
+
+
+library(org.Hs.eg.db)
+library(biomaRt) #convert ms to human
+```
+
+```{r}
+merged_obj <- readRDS('/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/xenium_merged_seurat.rds')
+```
+
+```{r}
+merged_obj <- ScaleData(merged_obj)
+```
+
+```{r}
+DimPlot(merged_obj, group.by = "cell_type", label=T) + ggtitle("merged")
+```
+
+
+```{r, Calculater Chemokine-receptor score}
+# Define the ligand-receptor pairs
+ligand_receptor_pairs <- list(
+  c('CCL21', 'CCR7'),
+  c('CXCL12', 'CXCR4'),
+  c('CXCL13', 'CXCR5'), 
+  c('CXCL9', 'CXCR3')
+)
+
+# Set distance threshold
+distance_threshold <- 20
+
+# Initialize lists to store results
+results_list <- list()
+all_plot_data <- list()
+
+# Loop through both "FL" and "DLBCL" cell types
+for (cell_type in c("FL", "DLBCL")) {
+  # Subset the merged object for the current cell type
+  subset_obj <- subset(merged_obj, type %in% c(cell_type))
+  
+  # Extract metadata and expression data
+  metadata_subset <- as.data.frame(subset_obj@meta.data)
+  DefaultAssay(subset_obj) <- "RNA"
+  
+  # Get gene names from ligand-receptor pairs
+  genes <- unique(unlist(ligand_receptor_pairs))
+  subset_df <- cbind(metadata_subset, FetchData(subset_obj, genes))
+  
+  # Initialize a list to store results for each ligand-receptor pair
+  results_list[[cell_type]] <- list()
+
+  # Loop through each ligand-receptor pair
+  for (pair in ligand_receptor_pairs) {
+    ligand <- pair[1]
+    receptor <- pair[2]
+    
+    # Create binary variables for ligand and receptor expression (+/−)
+    subset_df[[paste0(ligand, "_pos")]] <- ifelse(subset_df[[ligand]] > 0, 1, 0)
+    subset_df[[paste0(receptor, "_pos")]] <- ifelse(subset_df[[receptor]] > 0, 1, 0)
+    
+    # Prepare coordinates for neighborhood analysis
+    coords <- subset_df[, c("nucleus_centroid_x", "nucleus_centroid_y")]
+    
+    # Compute pairwise distances between cells (Euclidean distance)
+    distance_matrix <- dist(coords)
+    distance_matrix <- as.matrix(distance_matrix)
+    
+    # Create a binary adjacency matrix (1 if within threshold distance, else 0)
+    adjacency_matrix <- ifelse(distance_matrix <= distance_threshold, 1, 0)
+    
+    # Initialize a data frame to store results for the current pair
+    neighboring_results <- data.frame(cell_id = rownames(subset_df), ligand_receptor_assoc = NA)
+    
+    # Loop through each cell to check neighbors for ligand-receptor expression
+    for (i in 1:nrow(subset_df)) {
+      neighbors <- which(adjacency_matrix[i, ] == 1)
+      
+      # Check if any ligand-expressing cells have a receptor-expressing neighbor
+      ligand_to_receptor <- sum(subset_df[[paste0(ligand, "_pos")]][i] == 1 & subset_df[[paste0(receptor, "_pos")]][neighbors] == 1)
+      
+      # Check if any receptor-expressing cells have a ligand-expressing neighbor
+      receptor_to_ligand <- sum(subset_df[[paste0(receptor, "_pos")]][i] == 1 & subset_df[[paste0(ligand, "_pos")]][neighbors] == 1)
+      
+      # Total ligand-receptor association score: sum of both directions (ligand -> receptor, receptor -> ligand)
+      neighboring_results$ligand_receptor_assoc[i] <- ligand_to_receptor + receptor_to_ligand
+    }
+    
+    # Store results per LR pair
+    results_list[[cell_type]][[paste0(ligand, "_", receptor)]] <- neighboring_results
+  }
+
+  # Combine results into a single data frame for plotting and export
+  plot_df <- do.call(rbind, lapply(names(results_list[[cell_type]]), function(pair_name) {
+    result <- results_list[[cell_type]][[pair_name]]
+    coords <- subset_df[, c("nucleus_centroid_x", "nucleus_centroid_y")]
+    
+    result$nucleus_centroid_x <- coords$nucleus_centroid_x
+    result$nucleus_centroid_y <- coords$nucleus_centroid_y
+    result$pair <- pair_name
+    return(result)
+  }))
+
+
+  # Data clipping for visualization
+  #plot_df$ligand_receptor_assoc[plot_df$ligand_receptor_assoc > 2] <- 2
+  
+  # Add metadata
+  plot_df$cell_type <- cell_type
+  
+  # Save per-cell type CSV
+  write.csv(plot_df,
+            paste0('/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/LR_strength_data_new_', cell_type, '.csv'),
+            row.names = FALSE)
+  
+  # Save plot
+  pdf(paste0('/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/LR_strength_xenium_new_', cell_type, '.pdf'), width = 10, height = 3)
+  print(
+    ggplot(plot_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = ligand_receptor_assoc)) +
+      geom_point(size = 0.000002, alpha = 1) +
+      facet_wrap(~pair) +
+      scale_color_gradientn(colors = parula(10)) +
+      theme_void() +
+      labs(x = "X Coordinate", y = "Y Coordinate", color = "Chemokine-Receptor Association") +
+      ggtitle(paste("Spatial Distribution of Ligand-Receptor Associations -", cell_type))
+  )
+  dev.off()
+  
+  # Store in combined list
+  all_plot_data[[cell_type]] <- plot_df
+}
+
+# Export full combined dataset
+combined_df <- do.call(rbind, all_plot_data)
+write.csv(combined_df,
+          '/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/LR_strength_all_samples_threshold20.csv',
+          row.names = FALSE)
+```
+
+#for SFig10
+```{r, fig.width=6, fig.height=6}
+csv_path <- "/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/LR_strength_all_samples_threshold20.csv"
+
+# Read the data
+plot_data <- read.csv(csv_path)
+
+# Optional: clip max values for nicer color scaling
+# plot_data$ligand_receptor_assoc[plot_data$ligand_receptor_assoc > 2] <- 2
+
+# Create and save one plot per cell type
+for (cell_type in unique(plot_data$cell_type)) {
+  plot_df <- filter(plot_data, cell_type == !!cell_type)
+
+  pdf(paste0("/omics/groups/OE0606/internal/amathiou/Projects/202402_PhDpapers/LNStroma/202504_Xenium/LR_strength_fromCSV_", cell_type, ".pdf"),
+      width = 6, height = 6)
+  plot_df$ligand_receptor_assoc[plot_df$ligand_receptor_assoc > 5] <- 5
+
+  print(
+    ggplot(plot_df %>% arrange(ligand_receptor_assoc), aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = ligand_receptor_assoc)) +
+      geom_point(size = 0.01, alpha = 1) +
+      facet_wrap(~pair) +
+      scale_color_gradientn(colors = viridis(5)) +  # swap for parula if needed
+      theme_void() +
+      labs(x = "X Coordinate", y = "Y Coordinate", color = "Strength") +
+      ggtitle(paste("Spatial Distribution of Ligand-Receptor Associations -", cell_type))
+  )
+  
+  dev.off()
+}
+
+```
+
+#Ligand receptor chemokine interactions (For figure 2)
+```{r}
+lr <- plot_data
+lr_dlbcl <- subset(lr, cell_type %in% c("DLBCL"))
+md_dlbcl <- subset(merged_obj, type %in% c("DLBCL"))
+md_dlbcl <- as.data.frame(md_dlbcl@meta.data) %>% rownames_to_column(var = "cell_id")
+lr_dlbcl <- left_join(lr_dlbcl, md_dlbcl, by = "cell_id")
+
+lr_fl <- subset(lr, cell_type %in% c("FL"))
+md_fl <- subset(merged_obj, type %in% c("FL"))
+md_fl <- as.data.frame(md_fl@meta.data) %>% rownames_to_column(var = "cell_id")
+lr_fl <- left_join(lr_fl, md_fl, by = "cell_id")
+```
+
+```{r}
+cxcl13_lr_dlbcl <- lr_dlbcl %>% subset(pair == "CXCL13_CXCR5")
+cxcl13_lr_dlbcl <- cxcl13_lr_dlbcl %>%
+  mutate(order = ifelse(ligand_receptor_assoc %in% c(1,2,3,4,5), 1, 0))
+
+cxcl13_lr_fl <- lr_fl %>% subset(pair == "CXCL13_CXCR5")
+cxcl13_lr_fl <- cxcl13_lr_fl %>%
+  mutate(order = ifelse(ligand_receptor_assoc %in% c(1,2,3,4,5), 
+                        1, 
+                        0))
+```
+
+```{r}
+p2 <- ggplot(cxcl13_lr_dlbcl, aes(x = nucleus_centroid_x.x, y = nucleus_centroid_y.x, color = ligand_receptor_assoc)) +
+  geom_point(data = cxcl13_lr_dlbcl %>% arrange('ligand_receptor_assoc'),
+             size = 0.5, color = "#ECECEC", alpha = 1) +
+  geom_point(data = subset(cxcl13_lr_dlbcl, order == 1),
+             size = 0.5, aes(color = ligand_receptor_assoc), alpha = 1) +
+  #geom_point(size = 0.5, alpha = 1) +
+  scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) +
+  theme_void() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+
+p1 <- ggplot(cxcl13_lr_fl, aes(x = nucleus_centroid_x.x, y = nucleus_centroid_y.x, color = ligand_receptor_assoc)) +
+  geom_point(data = cxcl13_lr_fl %>% arrange('ligand_receptor_assoc'),
+             size = 0.5, color = "#ECECEC", alpha = 1) +
+  geom_point(data = subset(cxcl13_lr_fl, order == 1),
+             size = 0.5, aes(color = ligand_receptor_assoc), alpha = 1) +
+  scale_color_gradientn(colors = c("#ECECEC", "#AD2E24")) +
+  theme_void() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+```
+
+```{r}
+p1
+```
+
+```{r}
+p2
+```
+
+```{r}
+pdf(paste0(out_dir_figs, "xenium_fl_lr_cxcl13_cxcr5_spatial.pdf"), width = 4, height = 4)
+p1
+dev.off()
+
+pdf(paste0(out_dir_figs, "xenium_dlbcl_lr_cxcl13_cxcr5_spatial.pdf"), width = 4, height = 4)
+p2
+dev.off()
+```
