@@ -3,6 +3,7 @@ title: "Figure4"
 output: html_document
 date: "2024-02-29"
 ---
+
 ---
 title: "Figure 4"
 output: html_document
@@ -19,6 +20,7 @@ library(dplyr)
 library(readr)
 library(tidyverse)
 library(ggalluvial)
+library(aws.s3)
 ```
 
 # Load objects
@@ -26,11 +28,19 @@ For the following code please downlaod the following objects from Zenodo <insert
 - single cell LN stromal cell object: col 
 - interaction potential object
 ```{r setup, include=FALSE}
-scRNA <- readRDS("") #Available in zenodo
+scRNA <- suppressWarnings(s3readRDS("202312_LN011_LN012_Abe_annotation_DASeq_updated_new_umap.rds", 
+                                           bucket = "A010-LNStroma",
+                                           base_url="",
+                                           key="",
+                                           secret= "",
+                                           region = "",
+                                           check_region=F,
+                                           verbose = F))
 # Scriabin data
 interaction_potential <- readRDS("path/to/interaction_potential.rds")
 source("/path/to/Figure_config.R")
 ```
+
 
 # Panels 
 ## A 
@@ -46,10 +56,16 @@ DimPlot(interaction_potential, group.by = "zones", cols=c("orange2", "#368F8A", 
 
 ## C
 ```{r Panel C, fig.height=6, fig.width=12, fig.cap="UMAP feature plot color coded by the geometic mean expression of chemokines"}}
-FeaturePlot(interaction_potential, features = c("CXCL13=CXCR5","CCL19=CCR7","CCL21=CCR7",
-                                     "CXCL9=CXCR3","CXCL10=CXCR3","CXCL11=CXCR3"),
-            split.by = "sender_group", cols = annotation_colors$features)
+FeaturePlots <- FeaturePlot(interaction_potential, features = c("CXCL12=CXCR4", "CXCL13=CXCR5","CCL19=CCR7","CCL21=CCR7",
+                                     "CXCL9=CXCR3","CXCL10=CXCR3","CXCL11=CXCR3"), combine = F)
+
+pdf("path/to/.pdf", width = 4, height = 3.5)
+lapply(seq(1:7), function(i){
+  FeaturePlots[[i]] + scale_colour_gradientn(colours = c("#ECECEC", "#AD2E24"))+theme_void()+scale_y_reverse()+scale_x_reverse()
+})
+dev.off()
 ```
+
 
 ## D
 ```{r}
@@ -127,15 +143,6 @@ k6Data_rLN$summary_zone <- k6Data_rLN$id_nhood.x
 k6Data_rLN$summary_zone[k6Data_rLN$id_nhood.x %in% c("BEC-rich T zone", "T zone")] <- "T zone"
 k6Data_rLN$summary_zone[k6Data_rLN$id_nhood.x %in% c("B prol niche", "Follicle cluster 1")] <- "B zone"
 
-k6Data_rLN_summary <- k6Data_rLN %>% group_by(summary_zone, pair) %>% summarise(n_pair_summary= sum(n_pair), 
-                                                          n_pair_total= sum(n_total))
-data <- k6Data_rLN %>%
-  filter(pair %in% c("FDC_B", "T-FH_B", "MSC_B", "MSC_T-H", "MSC_T-TOX", "MSC_T-REG", "MSC_Myeloid")) %>%
-  filter(!id_nhood.x %in% c("Plasma cells","Lymphatic sinus")) %>%
-  dplyr::select(id_nhood.x, pair, pct_codex) %>%
-  pivot_wider(values_from = "pct_codex", names_from = pair) %>% column_to_rownames("id_nhood.x") %>%
-  scale() %>%
-  t()
 
 k6Data_rLN_summary <- k6Data_rLN %>% group_by(summary_zone, pair) %>% summarise(n_pair_summary= sum(n_pair), 
                                                                                 n_total_summary = sum(n_total))
@@ -166,12 +173,23 @@ data_joined <- t(data_scriabin) %>%
 
 #data_joined$`B cell zone like ngh`[5:6] <- 0.000001
 
-data_joined <- data_joined[,-2]
+data_joined <- t(data_joined[-2,])
+data_joined <- data_joined[-2,]
 
-pheatmap::pheatmap(data_joined, 
-          color =colorspace::diverging_hcl(n = 40, palette = "Blue-Red3"),
+row_order <- c("B zone", "B cell zone like ngh", "T zone", "T cell zone like ngh")
+data_joined <- data_joined[c(row_order, setdiff(rownames(data_joined), row_order)), ]
+
+
+col_order <-  c("MSC_T-REG","MSC_Myeloid","MSC_T-TOX", "MSC_T-H", "FDC_B")
+data_joined <- data_joined[,c(col_order, setdiff(rownames(data_joined), row_order))]
+
+col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("#007EA7", "white", "#AD2E24"))
+vals <- seq(-1, 1, length.out = 1000)
+colors <- col_fun(vals) 
+pheatmap::pheatmap(data_joined,  
+          color = colors,
           #rev(colorspace::diverging_hcl(n = 40, h = c(-324, 193), c = 100, l = c(60, 100), power = 1)), 
-          scale = "row", cluster_cols = T, cluster_rows = T, na_col = "grey80")+coord_flip()
+          scale = "column", cluster_cols = F, cluster_rows = F, na_col = "grey80")+coord_flip() 
   
 
 ```
@@ -215,10 +233,10 @@ interaction_potential@meta.data %>%
 interaction_potential@meta.data %>% 
   group_by(zones,sender_group) %>% tally() %>% 
   #filter(!zones=="other") %>% 
-  ggplot(aes(x=sender_group,
-             y=n, fill=factor(zones, levels = rev(c("T cell zone like ngh", "B cell zone like ngh", "Inflammatory ngh", "other")))))+
+  ggplot(aes(x=factor(zones, levels = rev(c("T cell zone like ngh", "B cell zone like ngh", "Inflammatory ngh", "other"))),
+             y=n, fill=sender_group))+
   geom_bar(position="fill",stat="identity")+
-  scale_fill_manual(values = rev(c("#5e65be",  "#74c8c3", "#d8d97a", "grey70")), name="LN zones")+
+  scale_fill_manual(values = annotation_colors$Type_binned, name="Disease state")+
 
   theme_bw()+
   theme(panel.grid.major = element_blank(), 
@@ -228,7 +246,9 @@ interaction_potential@meta.data %>%
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         panel.background = element_rect(colour = "grey60", size=0.5))+
   xlab("")+
-  ylab("Scaled fractions per zone")
+  ylab("Scaled fractions per zone")+
+  coord_flip()
+
 
 ```
 
@@ -319,3 +339,4 @@ ggplot(interaction_potential@meta.data, aes(y= inf2, x = sender_group, fill=send
   ylab("Inflammotory score")+
   ggtitle("Inflammotory score")+NoLegend()
 ```
+
