@@ -18,8 +18,8 @@ library(pals)
 
 # Load objects
 ```{r setup, include=FALSE}
-scRNA <- readRDS("") #Available in zenodo
-codex <-  readRDS()#Available in zenodo
+scRNA <- readRDS("") #Available in zenodo as scRNA_LN_stromal_cells.rds
+codex <-  readRDS()#Available in the source data of the manuscript
 source("/path/to/Figure_config.R")
 ```
 
@@ -111,6 +111,7 @@ umap_full <- ggplot(data,aes(UMAP_1, UMAP_2)) +
 
 ### right
 ```{r Panel B right, fig.height=8, fig.width=8, fig.cap="UMAP of segemtet codex images"}
+
 anno_broad=c("BEC"="#F5818D",
              "FDC"="#088B1A",
              "B"="#0C80ED",
@@ -160,8 +161,8 @@ codex_sub@meta.data %>% ggplot(aes(umap1, umap2, color= anno_broad_v2)) +
 
 ## D
 ```{r Panel D}
-#tmp_csv: output from nhood analysis script found here: https://github.com/ljopp-saile/LNStroma/blob/main/Figure1_01_nhood.py
-tmp_csv <- read.csv("/g/scb2/zaugg/amathiou/2021July_LNS012/6.CODEX/20221011_nhood_analysis/20221025_Nhood_Nolan2022/20221027_AllSamples_sliding_withK.csv", row.names = 1)
+#tmp_csv: output from nhood analysis script found here: https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/Figure1_NhoodAnalysis.py
+tmp_csv <- read.csv("AllSamples_sliding_withK.csv", row.names = 1)
 tmp_csv <- tmp_csv %>% gather(colnames(tmp_csv)[grep("Nhood_k", colnames(tmp_csv))], key = "Nhood_K", value = "Nhood_ID")
 tmp_csv$sample <- paste0(tmp_csv$diag, " ", tmp_csv$slide)
 
