@@ -25,8 +25,9 @@ source("/path/to/Figure_config.R")
 ```
 
 ## B
-## Note that for SCENIC output you can directly read targene_df from Zenodo
-## The following ˜20 lines illustrate how to preprocess the SCENIC output in order to get a network
+## Note that for SCENIC output you can directly read targene_df from Zenodo as GRN_90pt.rds
+## The following ˜20 lines illustrate how to preprocess the SCENIC output in order to get a network (ie what is in Zenodo)
+
 ```{r}
 # SCENIC output-target genes are assigned to each TF
 #Note: This is what we use for network re-construction
@@ -52,10 +53,10 @@ targene_df <- filter(targene_df_raw, count > 90) # This is the GRN used in C
 
 ## B
 ```{r}
-targene_df <- readRDS("") #Available in Zenodo, you can read directly this and skip the part above
+targene_df <- readRDS("") #Available in Zenodo as GRN_90pt.rds, you can read directly this and skip the part above
 
 #Read in differentially expressed genes
-#Output from chunk of code from Figure 2 
+#Output from chunk of code from Figure 2 panel B but data also available as source data in the manuscript
 #DE_all <- FindMarkers(tmp_obj, ident.2 = "rLN", ident.1 = "DLBCL", pseudocount.use = 0.01, test.use = "MAST", only.pos = F, logfc.threshold = 0, assay = "RNA")
 
 de_genes_scenic <- list()
@@ -162,6 +163,7 @@ Heatmap(or_df, col = col_fun, name = "log2OR") #panel B, not that from this we s
 
 # Panels E, F, G
 Object also used for TCR clonal expansion analysis in Figure 3
+For a more complete image of the analysis, look at https://github.com/ZauggGroup/LNarch/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
 Dataset from Roider et al 2024 (Nat Cell Bio)
 5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
 Note that here we only focused on rLN, DLBCL and FL
