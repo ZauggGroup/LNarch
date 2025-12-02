@@ -20,18 +20,16 @@ library(ComplexHeatmap)
 
 # Load objects
 ```{r setup, include=FALSE}
-scRNA <- readRDS("") #Available in zenodo
+scRNA <- readRDS("") #Available in zenodo as scRNA_LN_stromal_cells.rds
 source("/path/to/Figure_config.R")
 ```
 
 ## B
-## Note that for SCENIC output you can directly read targene_df from Zenodo as GRN_90pt.rds
-## The following ˜20 lines illustrate how to preprocess the SCENIC output in order to get a network (ie what is in Zenodo)
-
+## SCENIC output can be directly read targene_df from Zenodo as GRN_90pt.rds
 ```{r}
-# SCENIC output-target genes are assigned to each TF
-#Note: This is what we use for network re-construction
-reg_files <- list.files("/g/scb2/zaugg/amathiou/2021July_LNS012/4.SCENIC/20211216_LNStroma/output/regulon", 
+#  SCENIC output-target genes are assigned to each TF
+# Note: This illustrates how to process SCENIC output for network re-construction (i.e. creating GRN_90pt.rds from SCENIC output)
+reg_files <- list.files("path/to/regulon", 
                        pattern = ".*\\(\\+\\)\\.tsv$", 
                        full.names = T)
 
@@ -134,7 +132,7 @@ upset(fromList(sig_TFs), nsets = 15, order.by = "freq", point.size = 1.5)
 
 
 # Start of panel B code
-msc_or <- read.table(paste0("/g/scb2/zaugg/amathiou/2021July_LNS012/4.SCENIC/20211216_LNStroma/FisherTF_targets_FRC.tsv"))
+msc_or <- read.table(paste0("/path/to/FisherTF_targets_FRC.tsv"))
 
 plot_tfs <- unique(unlist(sig_TFs))
 #tile plot but with log2fc
