@@ -160,11 +160,12 @@ Heatmap(or_df, col = col_fun, name = "log2OR") #panel B, not that from this we s
 ```
 
 # Panels E, F, G
-Object also used for TCR clonal expansion analysis in Figure 3
-For a more complete image of the analysis, look at https://github.com/ZauggGroup/LNarch/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
-Dataset from Roider et al 2024 (Nat Cell Bio)
-5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
-Note that here we only focused on rLN, DLBCL and FL
+#For TCR seq related analysis, see https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
+## Object also used for TCR clonal expansion analysis in Figure 3
+## Dataset from Roider et al. Nat Cell Biol 2024
+## 5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
+## Analysis was focused on rLN, FL and DLBCL
+
 ```{r Panel E left}
 DF_TCRrep <- readRDS("/g/scb2/zaugg/amathiou/2021July_LNS012/10.TCRseq/202402_TCRrepertoire.rds") #Get info from Zenodo
 
@@ -320,14 +321,15 @@ ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) +
   scale_fill_manual(values = c("lightgrey", "#B13A2C")) + stat_compare_means()
 ```
 
+# Panel J
+
 # Panels L and M
 ```{r}
 CL_obj <- readRDS(".../seurat_lnsc_coculture_res0.5.rds") #accessible via Zenodo
 CL_obj_sub <- subset(CL_obj, subset= cc_cluster%in% c("LNSC_co", "LNSC_mono"))
 DefaultAssay(CL_obj_sub) <- "RNA"
-```
 
-```{r, Panel L}
+## Panel L
 DimPlot(CL_obj_sub, group.by = "cc_cluster", label = T, label.box = T, cols = c("#67B86E", "#D3D3D3"), pt.size = 0.5) + theme(legend.position = "none")
 ```
 
