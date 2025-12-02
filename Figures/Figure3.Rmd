@@ -322,59 +322,308 @@ ggplot(df_clonotypes, aes(x = Expanded, y = IFNG)) +
 ```
 
 # Panel J
-
-# Panels L and M
 ```{r}
-CL_obj <- readRDS(".../seurat_lnsc_coculture_res0.5.rds") #accessible via Zenodo
-CL_obj_sub <- subset(CL_obj, subset= cc_cluster%in% c("LNSC_co", "LNSC_mono"))
-DefaultAssay(CL_obj_sub) <- "RNA"
+## Load data
+xenium_seurat <- readRDS("") #Available in zenodo as "xenium_merged_seurat.rds"
 
-## Panel L
-DimPlot(CL_obj_sub, group.by = "cc_cluster", label = T, label.box = T, cols = c("#67B86E", "#D3D3D3"), pt.size = 0.5) + theme(legend.position = "none")
+## Define CXCR3+ status across all cell types
+RidgePlot(subset(xenium_seurat, cell_type_binned %in% c("T-TOX")), features="CXCR3")
+cxcr3_positive <- GetAssayData(xenium_seurat, assay = "RNA", slot = "data")["CXCR3", ] > 2
+merged_obj$CXCR3_status <- ifelse(cxcr3_positive, "CXCR3+", "CXCR3-")
+
+## Define CXCL9+ status across all cell types
+RidgePlot(xenium_seurat, features="CXCL9")
+cxcl9_positive <- GetAssayData(xenium_seurat, assay = "RNA", slot = "data")["CXCL9", ] > 2
+merged_obj$CXCL9_status <- ifelse(cxcl9_positive, "CXCL9+", "CXCL9-")
+
+## Tidy data
+xenium_seurat@meta.data <- mutate(xenium_seurat@meta.data, cell_type_binned_cxcr3 = case_when(cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & CXCR3_status == "CXCR3+"~"CXCR3+ T",
+                                                      cell_type_binned %in% c("T-TOX", "T-H", "T-FH", "T-REG") & CXCR3_status == "CXCR3-"~"CXCR3- T",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9+"~"CXCL9+ FRC",
+                                                      cell_type_binned %in% c("rFRC", "FRC") & CXCL9_status == "CXCL9-"~"CXCL9- FRC",
+                                                      cell_type_binned %in% c("FL-B", "Myeloid", "FDC", "BEC", "DLBCL-B")~"Other"))
+
+genes <- c("CXCL9", "CXCR3")
+metadata <- as.data.frame(xenium_seurat@meta.data)
+DefaultAssay(xenium_seurat) <- "RNA"
+merged_df <-  cbind(metadata, FetchData(xenium_seurat, genes))
+
+fl_df <- subset(xenium_seurat, type %in% c("FL"))
+dlbcl_df <- subset(xenium_seurat, type %in% c("DLBCL"))
+
+# CXCL9-CXCR3 spatial plots
+
+panel_j_upperleft <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned_cxcr3)) +
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 %in% c("Other", "CXCR3- T", "CXCL9- FRC")),
+             alpha = 1, size = 0.25, color = "#ececec", shape = 16) +
+  
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 == "CXCR3+ T"),
+             alpha = 0.5, size = 1, color = "mediumpurple1", shape = 16) +
+
+  geom_point(data = subset(fl_df, cell_type_binned_cxcr3 == "CXCL9+ FRC"),
+             alpha = 0.5, size = 1, color = "#2AC200", shape = 16) +
+  #scale_color_manual(values = c(
+  #  "Other" = "#f0f0f0",
+  #  "CXCR3- T" = "#f0f0f0",
+  #  "CXCR3+ T" = "mediumpurple1"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank()
+)
+
+panel_j_upperright <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned_cxcr3)) +
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 %in% c("Other", "CXCR3- T", "CXCL9- FRC")),
+             alpha = 1, size = 0.25, color = "#ececec", shape = 16) +
+  
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 == "CXCR3+ T"),
+             alpha = 0.5, size = 1, color = "mediumpurple1", shape = 16) +
+
+  geom_point(data = subset(dlbcl_df, cell_type_binned_cxcr3 == "CXCL9+ FRC"),
+             alpha = 0.5, size = 1, color = "#2AC200", shape = 16) +
+  #scale_color_manual(values = c(
+  #  "Other" = "#f0f0f0",
+  #  "CXCR3- T" = "#f0f0f0",
+  #  "CXCR3+ T" = "mediumpurple1"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank()
+)
+
+panel_j_upperleft + panel_j_upperright
+
+## Density of CXCR3+ T cells around CXCL9+ FRCs
+### FL
+cxcl9_pos_rfrc <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9+ FRC")
+cxcl9_neg_rfrc <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9- FRC")
+cxcr3_pos_t <- fl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3+ T")
+
+#### Convert coordinates into spatial point patterns (ppp format)
+buffer <- 100  # Increase buffer slightly
+
+x_min <- min(fl_df$nucleus_centroid_x) - buffer
+x_max <- max(fl_df$nucleus_centroid_x) + buffer
+y_min <- min(fl_df$nucleus_centroid_y) - buffer
+y_max <- max(fl_df$nucleus_centroid_y) + buffer
+
+window <- owin(xrange = c(x_min, x_max), yrange = c(y_min, y_max))
+print(window)
+
+#### Convert cell positions to spatial point patterns
+cxcr3_pos_t_ppp <- ppp(cxcr3_pos_t$nucleus_centroid_x, cxcr3_pos_t$nucleus_centroid_y, window = window)
+cxcl9_pos_rfrc_ppp <- ppp(cxcl9_pos_rfrc$nucleus_centroid_x, cxcl9_pos_rfrc$nucleus_centroid_y, window = window)
+cxcl9_neg_rfrc_ppp <- ppp(cxcl9_neg_rfrc$nucleus_centroid_x, cxcl9_neg_rfrc$nucleus_centroid_y, window = window)
+
+#### Perform Kernel Density Estimation (KDE) for CXCR3+ T cells
+sigma_value <- 50  # Adjust as needed
+cxcr3_pos_density <- density(cxcr3_pos_t_ppp, sigma = sigma_value)
+
+#### Extract CXCR3+ T cell density at CXCL9+ and CXCL9- rFRC locations
+cxcr3_pos_at_cxcl9_pos_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_pos_rfrc_ppp))
+cxcr3_pos_at_cxcl9_neg_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_neg_rfrc_ppp))
+
+colnames(cxcr3_pos_at_cxcl9_pos_rfrc) <- "density"
+colnames(cxcr3_pos_at_cxcl9_neg_rfrc) <- "density"
+
+#### Create a combined dataframe for both CXCL9+ FRC and CXCL9- FRC for comparison
+density_df_fl <- rbind(
+  data.frame(density = cxcr3_pos_at_cxcl9_pos_rfrc$density, group = "CXCL9+ FRC"),
+  data.frame(density = cxcr3_pos_at_cxcl9_neg_rfrc$density, group = "CXCL9- FRC")
+)
+
+#### Plot the comparison between CXCL9+ and CXCL9- FRCs
+density_df_fl$group <- factor(density_df_fl$group, levels = c("CXCL9+ FRC", "CXCL9- FRC"))
+panel_j_lowerleft <- ggplot(density_df_fl, aes(x = group, y = density)) +
+  geom_boxplot(aes(fill = group), outlier.shape = NA, width = 0.5, alpha = 0.7) +
+  #geom_jitter(shape = 16, position = position_jitter(0.2), alpha = 0.4) +
+  scale_fill_manual(values = c("#2AC200", "#f0f0f0")) + # Adjust the colors
+  ylab("CXCR3+ T Density")+
+  coord_flip()+
+  stat_compare_means(method = "wilcox.test", label = "p.format", comp = list(c("CXCL9+ FRC", "CXCL9- FRC")), p.adjust.method = "fdr") +
+  theme_bw() +
+  theme(
+    plot.title = element_blank(),
+    plot.margin = margin(10, 10, 10, 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(color = "black"),
+    legend.position = "none",
+    aspect.ratio = 0.5,
+    axis.text.y = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black")
+  )
+
+### DLBCL
+
+cxcl9_pos_rfrc <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9+ FRC")
+cxcl9_neg_rfrc <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCL9- FRC")
+cxcr3_pos_t <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3+ T")
+#cxcr3_neg_t <- dlbcl_df %>% filter(cell_type_binned_cxcr3 == "CXCR3- T")
+
+#### Convert coordinates into spatial point patterns (ppp format)
+buffer <- 100  # Increase buffer slightly
+
+x_min <- min(dlbcl_df$nucleus_centroid_x) - buffer
+x_max <- max(dlbcl_df$nucleus_centroid_x) + buffer
+y_min <- min(dlbcl_df$nucleus_centroid_y) - buffer
+y_max <- max(dlbcl_df$nucleus_centroid_y) + buffer
+
+window <- owin(xrange = c(x_min, x_max), yrange = c(y_min, y_max))
+print(window)
+
+#### Convert cell positions to spatial point patterns
+cxcr3_pos_t_ppp <- ppp(cxcr3_pos_t$nucleus_centroid_x, cxcr3_pos_t$nucleus_centroid_y, window = window)
+cxcl9_pos_rfrc_ppp <- ppp(cxcl9_pos_rfrc$nucleus_centroid_x, cxcl9_pos_rfrc$nucleus_centroid_y, window = window)
+cxcl9_neg_rfrc_ppp <- ppp(cxcl9_neg_rfrc$nucleus_centroid_x, cxcl9_neg_rfrc$nucleus_centroid_y, window = window)
+
+#### Perform Kernel Density Estimation (KDE) for CXCR3+ T cells
+sigma_value <- 50  # Adjust as needed
+cxcr3_pos_density <- density(cxcr3_pos_t_ppp, sigma = sigma_value)
+
+#### Extract CXCR3+ T cell density at CXCL9+ and CXCL9- rFRC locations
+cxcr3_pos_at_cxcl9_pos_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_pos_rfrc_ppp))
+cxcr3_pos_at_cxcl9_neg_rfrc <- as.data.frame(spatstat.geom::interp.im(cxcr3_pos_density, cxcl9_neg_rfrc_ppp))
+
+colnames(cxcr3_pos_at_cxcl9_pos_rfrc) <- "density"
+colnames(cxcr3_pos_at_cxcl9_neg_rfrc) <- "density"
+
+#### Create a combined dataframe for both CXCL9+ FRC and CXCL9- FRC for comparison
+density_df_dlbcl <- rbind(
+  data.frame(density = cxcr3_pos_at_cxcl9_pos_rfrc$density, group = "CXCL9+ FRC"),
+  data.frame(density = cxcr3_pos_at_cxcl9_neg_rfrc$density, group = "CXCL9- FRC")
+)
+
+#### Plot the comparison between CXCL9+ and CXCL9- FRCs
+density_df_dlbcl$group <- factor(density_df_dlbcl$group, levels = c("CXCL9+ FRC", "CXCL9- FRC"))
+panel_j_lowerright <- ggplot(density_df_dlbcl, aes(x = group, y = density)) +
+  geom_boxplot(aes(fill = group), outlier.shape = NA, width = 0.5, alpha = 0.7) +
+  #geom_jitter(shape = 16, position = position_jitter(0.2), alpha = 0.4) +
+  scale_fill_manual(values = c("#2AC200", "#f0f0f0")) + # Adjust the colors
+  ylab("CXCR3+ T Density")+
+  coord_flip()+
+  stat_compare_means(method = "wilcox.test", label = "p.format", comp = list(c("CXCL9+ FRC", "CXCL9- FRC")), p.adjust.method = "fdr") +
+  theme_bw() +
+  theme(
+    plot.title = element_blank(),
+    plot.margin = margin(10, 10, 10, 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(color = "black"),
+    legend.position = "none",
+    aspect.ratio = 0.5,
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black")
+  ) 
 ```
 
-```{r, Panel M}
-#Function to retrieve gene set list 
+
+# Panels K, L, M
+```{r}
+CL_obj <- readRDS(".../CoCulture_DLBCL.rds") #accessible via Zenodo
+DefaultAssay(CL_obj_sub) <- "RNA"
+
+## Panel K
+DimPlot(CL_obj, group.by = "group", reduction = "umap")+
+  scale_color_manual(values = colors_cond)+
+  NoLegend()
+
+## Panel L
+plot_df <- FetchData(CL_obj, vars = c("IFNG", "sample", "group", "cell_type"), slot = "data")
+#plot_df$group <- factor(plot_df$group, levels = c("B+T", "LNSC+T", "LNSC+B+T"))
+plot_df$cell_type <- factor(plot_df$cell_type, levels = c("iFRC", "B", "T"))
+
+ggplot(plot_df, aes(x = cell_type, y = IFNG, fill = cell_type)) +
+  geom_violin(
+    scale = "width",
+    adjust = 9, #smooth
+    trim = TRUE
+  ) +
+  #scale_y_continuous(limits = c(0,4.5))+
+  scale_fill_manual(values=colors)+
+  ggtitle("IFNG") +
+  ylab("Expression")+
+  #facet_wrap(~group)+
+  theme_classic() +
+  theme(plot.title = element_text(size = 12, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(color = "black"), 
+        aspect.ratio=2,
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+        axis.text.x = element_text(size = 12, color = "black", angle = 0, hjust = 0.5, vjust = 0.5),
+        legend.position = "none") +
+  stat_compare_means(
+    comparisons = list(c("B", "T")),
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.format"
+  )
+
+## Panel M
+
+lnsc <- subset(CL_obj, subset = group %in% c("LNSC", "LNSC+B", "LNSC+T", "LNSC+B+T"))
+lnsc <- subset(lnsc, cell_type == "iFRC")
+
 get_gsea_genes <- function(msigdb_table,
                            gsea_term){
   gsea_genes <- msigdb_table %>% as_tibble() %>% mutate(pathway = gsub("\thttp:", "", V1), genes=V7)
   gsea_genes <- gsea_genes %>% filter(pathway == gsea_term) %>% dplyr::select(genes) %>% unlist() %>% strsplit2("\t") %>% .[,-1]
 }
-```
-```{r, Panel M}
-Hallmark <- read.table(".../h.all.v7.4.symbols.gmt.txt", sep = "/") #Hallmark gene sets retrieved from http://gsea-msigdb.org
-IFNg_H <- get_gsea_genes(msigdb_table = Hallmark, gsea_term = "HALLMARK_INTERFERON_GAMMA_RESPONSE")
+ifng <- get_gsea_genes(msigdb_table = gene_sets, gsea_term = "HALLMARK_INTERFERON_GAMMA_RESPONSE")
+
 scores <- list()
-scores[[1]] <- IFNg_H
-CL_obj_sub <- AddModuleScore(object = CL_obj_sub, features = scores, ctrl = 5, name = c("IFNg_H"))
-CL_obj_sub[['Scores']] <- CreateAssayObject(data = t(x = FetchData(object = CL_obj_sub, vars = c("IFNg_H1"))))
-```
+scores[[1]] <- ifng
+lnsc <- AddModuleScore(object = lnsc, features = scores, ctrl = 5, name = c("ifng"))
+lnsc[['Scores']] <- CreateAssayObject(data = t(x = FetchData(object = lnsc, vars = c("ifng1"))))
 
-```{r, Panel M}
-comparisons <- list(c("LNSC_co", "LNSC_mono"))
-CL_obj_sub@meta.data$cc_cluster <- factor(CL_obj_sub@meta.data$cc_cluster, levels = c("LNSC_mono", "LNSC_co"))
-```
+lnsc@meta.data$group <- factor(x = lnsc@meta.data$group, levels = c("LNSC", "LNSC+B", "LNSC+T", "LNSC+B+T"))
+comparisons = list(c("LNSC+T", "LNSC+B"), c("LNSC+B", "LNSC+B+T"))
 
-```{r, Panel M}
-VlnPlot(CL_obj_sub, features = "IFNg_H1", group.by = "cc_cluster", pt.size = 0, y.max = 0.9) +
-      stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", hide.ns = FALSE) +
+VlnPlot(lnsc, features = "ifng1", group.by = "group", pt.size = 0, y.max = 0.35) +
+      #stat_compare_means(comparisons = comparisons, method = "wilcox.test", label = "p.signif", ref.group = ".all.", hide.ns = FALSE) +
       geom_boxplot(inherit.aes = T, width=0.1, outlier.size = 0, alpha = 0.6, notch = FALSE) + 
-      geom_hline(yintercept = mean(CL_obj_sub$IFNg_H1), linetype = 2) + # Add horizontal line at base mean
-      ggtitle("Hallmark IFN response") + 
-    theme_bw() +
-    theme(text = element_text(size=14), 
-        axis.text.y = element_text(size = 10, color = "black"),
-        axis.text.x = element_text(size = 13, color = "black", angle = 0, hjust = 0.5),
-        axis.title.y = element_text(size = 13),
-        legend.title = element_blank(),
-        plot.title = element_text(size = 13, face = "bold"),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        aspect.ratio = 1,
-        legend.position="none")+
+      #geom_hline(yintercept = mean(lnsc$ifng1), linetype = 2) + # Add horizontal line at base mean
+      geom_hline(yintercept = median(lnsc@meta.data$ifng1[lnsc@meta.data$group == "LNSC"]), linetype = 2) +
+      ggtitle("LNSC ~ IFN response") + 
+      scale_y_continuous(limits=c(-0.2, 0.3), breaks=c(-0.2,-0.1,0,0.1,0.2,0.3))+
+      #coord_flip()+
+      theme(plot.title = element_text(size = 12, color = "black"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_rect(color = "black"), 
+            aspect.ratio=1.5,
+            axis.text.y = element_text(size = 12, color = "black"),
+            axis.title.x = element_text(size = 12, color = "black"),
+            #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+            axis.title.y = element_blank(), 
+            axis.text.x = element_text(size = 12, color = "black", angle = 45, hjust = 1, vjust = 1)) + 
       labs(x = "", y = "Module Score\n") +
-      scale_x_discrete(labels= c("Mono", "Co")) +
-      scale_fill_manual(values=c("#D3D3D3", "#67B86E")) +
+      stat_compare_means(
+            method = "wilcox.test",
+            p.adjust.method = "BH",
+            label = "p.format",
+            label.y = c(0.2,0.25),
+            comparisons = comparisons
+     ) +
+      scale_fill_manual(values = colors_cond) +
       NoLegend()
 ```
-
