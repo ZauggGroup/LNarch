@@ -16,7 +16,7 @@ library(tidyverse)
 library(org.Hs.eg.db)
 library(GO.db)
 library(ggpubr)
-library(biomaRt) #2.5 version necessary
+library(patchwork)
 ```
 
 # Load objects
@@ -31,7 +31,7 @@ source("/path/to/Figure_config.R")
 ```{r  Panel A, fig.height=8, fig.width=8, fig.cap="UMAP of LN stronal cells of RNA sequencing data with differential abundand cells"}
 ## Subset to stromal cells
 stroma_obj <- subset(
-  ln_obj,
+  scRNA,
   subset = Abe_binned %in% c("BEC", "LEC", "Mesenchymal")
 )
 
@@ -71,64 +71,78 @@ wide_df <- wide_df %>%
     ratio_rFRC = ifelse(FRC + rFRC + FDC > 0, rFRC / (FRC + rFRC + FDC), NA_real_)
   )
 
+wide_df$ratio_rBEC <- wide_df$ratio_rBEC *100
+wide_df$ratio_rFRC <- wide_df$ratio_rFRC *100
+
 wide_df$Group <- factor(wide_df$Group, levels = c("rLN", "FL", "DLBCL"))
+my_comparisons <- list( c("rLN", "FL"), c("FL", "DLBCL"), c("rLN", "DLBCL"))
 
 ## Generate plots -----------------------------------------------------------
-p1 <- ggplot(wide_df, aes(x = Group, y = ratio_rBEC, fill = Group)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.2, size = 0.8, alpha = 1) +
-  scale_fill_manual(values = custom_colors) +
-  labs(title = "rBEC", y = "Percentage", x = "") +
-  theme_bw() +
-  theme(
-    plot.title      = element_text(size = 13, face = "bold"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_rect(color = "black"),
-    legend.position  = "none",
-    axis.text.y      = element_text(size = 11, color = "black"),
-    axis.text.x      = element_text(size = 11, color = "black"),
-    axis.title.x     = element_text(size = 13, color = "black", vjust = 1),
-    axis.title.y     = element_text(size = 13, color = "black", vjust = 1)
+p1 <- ggplot(wide_df, aes(Group, ratio_rBEC)) +
+  geom_boxplot(aes(fill = Group), width = 0.5, outlier.shape = NA) +
+  ggbeeswarm::geom_beeswarm(
+    method = "compactswarm",     # tighter, more even spreading
+    priority = "density",        # order points by local density -> less stacking
+    corral = "wrap",             # keep all points inside the width
+    cex = 3, 
+    corral.width = 0.5,          # match your boxplot width
+    dodge.width = 0.5,           # align with grouped boxes if any
+    size = 2, shape = 1, stroke = 0.75
   ) +
-  stat_compare_means(
-    method      = "wilcox.test",
-    comparisons = list(
-      c("rLN", "FL"),
-      c("rLN", "DLBCL"),
-      c("FL", "DLBCL")
-    ),
-    label = "p.signif"
-  )
-
-p2 <- ggplot(wide_df, aes(x = Group, y = ratio_rFRC, fill = Group)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_jitter(width = 0.1, size = 0.8, alpha = 1) +
-  scale_fill_manual(values = custom_colors) +
-  labs(title = "rFRC", y = "Percentage", x = "") +
+  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E")) +
+  scale_y_continuous(limits = c(0,110), breaks = c(0,25,50,75,100))+
+  ylab("% rBEC") +
+  guides(fill = guide_legend(title = "Entity")) +
   theme_bw() +
-  theme(
-    plot.title      = element_text(size = 13, face = "bold"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_rect(color = "black"),
-    legend.position  = "none",
-    axis.text.y      = element_text(size = 11, color = "black"),
-    axis.text.x      = element_text(size = 11, color = "black"),
-    axis.title.x     = element_text(size = 13, color = "black", vjust = 1),
-    axis.title.y     = element_text(size = 13, color = "black", vjust = 1)
-  ) +
-  stat_compare_means(
-    method      = "wilcox.test",
-    comparisons = list(
-      c("rLN", "FL"),
-      c("rLN", "DLBCL"),
-      c("FL", "DLBCL")
-    ),
-    label = "p.signif"
-  )
+  theme(text = element_text(size=11), 
+        legend.position = "none",
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 12, color = "black"),
+        #legend.title = element_blank(),
+        #legend.text = element_text(size = 12, color = "black"),
+        plot.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        aspect.ratio = 1.5)+ 
+  stat_compare_means(method = "wilcox.test", label = "p.format", label.y = c(85,95,105),
+                     comparisons = my_comparisons,
+                     hide.ns = FALSE)
 
-combined_plot <- p1 + p2
+p2 <- ggplot(wide_df, aes(Group, ratio_rFRC)) +
+  geom_boxplot(aes(fill = Group), width = 0.5, outlier.shape = NA) +
+  ggbeeswarm::geom_beeswarm(
+    method = "compactswarm",     # tighter, more even spreading
+    priority = "density",        # order points by local density -> less stacking
+    corral = "wrap",             # keep all points inside the width
+    cex = 3, 
+    corral.width = 0.5,          # match your boxplot width
+    dodge.width = 0.5,           # align with grouped boxes if any
+    size = 2, shape = 1, stroke = 0.75
+  ) +
+  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E")) +
+  scale_y_continuous(limits = c(0,115), breaks = c(0,25,50,75,100))+
+  ylab("% rFRC") +
+  guides(fill = guide_legend(title = "Entity")) +
+  theme_bw() +
+  theme(text = element_text(size=11), 
+        legend.position = "none",
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 12, color = "black"),
+        #legend.title = element_blank(),
+        #legend.text = element_text(size = 12, color = "black"),
+        plot.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        aspect.ratio = 1.5)+ 
+  stat_compare_means(method = "wilcox.test", label = "p.format", label.y = c(85,95,105),
+                     comparisons = my_comparisons,
+                     hide.ns = FALSE)
+
+combined_plot <- p2 / p1
 
 print(combined_plot)
 ```
@@ -139,15 +153,15 @@ print(combined_plot)
 #Perform DE analysis between DLBCL and rLN
 dlbcl_rln_obj <- subset(scRNA, subset = group %in% c("rLN", "DLBCL"))
 DefaultAssay(dlbcl_rln_obj) <- "RNA"
-Idents(dlbcl_rln_obj) <- "lnsc_cluster"
+Idents(dlbcl_rln_obj) <- "Clusters_binned"
 
 DE_genes <- list()
 DE_genes_entrez <- list()
 
-#I ran for all populations since these data are eventually used for supplemental figures
+#Ran for all populations since these data are eventually used for supplemental figures
 for (j in c("FRC", "BEC", "LEC")){
   jj <- str_replace(j, "/", "_")
-  tmp_obj <- subset(dlbcl_rln_obj, subset = lnsc_cluster == j)
+  tmp_obj <- subset(dlbcl_rln_obj, subset = Clusters_binned == j)
   Idents(tmp_obj) <- "group"
   DE_all <- FindMarkers(tmp_obj, 
                         ident.2 = "rLN", 
@@ -168,19 +182,19 @@ mt_genes <- grep("^MT-",rownames(de_frc_rln_dlbcl))
 rp_genes <- c(grep("^RPS",rownames(de_frc_rln_dlbcl)), 
               grep("^RPL",rownames(de_frc_rln_dlbcl)))
 de_frc_rln_dlbcl <- de_frc_rln_dlbcl[-c(mt_genes, rp_genes), ]
-de_frc_rln_dlbcl$gene <- rownames(de_msc_pvc_rln_dlbcl)
+de_frc_rln_dlbcl$gene <- rownames(de_frc_rln_dlbcl)
 colnames(de_frc_rln_dlbcl) <- c("p_val", "log2FoldChange", "pct.1", "pct.2", "pvalue", "gene")
 ```
 
 ```{r Panel C, fig.width=3, fig.height=3}
 de_frc_rln_dlbcl$diffexpressed <- "NO"
 # if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange > 0.5 & de_msc_pvc_rln_dlbcl$pvalue < 10^-3] <- "UP"
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange > 0.5 & de_frc_rln_dlbcl$pvalue < 10^-3] <- "UP"
 # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange < -0.5 & de_msc_pvc_rln_dlbcl$pvalue < 10^-3] <- "DOWN"
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$log2FoldChange < -0.5 & de_frc_rln_dlbcl$pvalue < 10^-3] <- "DOWN"
 
-de_msc_pvc_rln_dlbcl$diffexpressed[de_msc_pvc_rln_dlbcl$gene %in% c("CXCL13", "CXCL12", "CCL21", "CCL19")] <- "DOWN"
-de_msc_pvc_rln_dlbcl$diffexpressed[de_msc_pvc_rln_dlbcl$gene %in% c("CXCL9", "CXCL10", "CXCL11")] <- "UP"
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$gene %in% c("CXCL13", "CXCL12", "CCL21", "CCL19")] <- "DOWN"
+de_frc_rln_dlbcl$diffexpressed[de_frc_rln_dlbcl$gene %in% c("CXCL9", "CXCL10", "CXCL11")] <- "UP"
 
 `%!in%` = Negate(`%in%`)
 de_frc_rln_dlbcl$delabel <- NA
@@ -223,90 +237,216 @@ ggplot(data=de_frc_rln_dlbcl, aes(x=log2FoldChange, y=-log10(pvalue), col=diffex
 
 ## C
 ```{r Panel C}
-loeffler <- readRDS("") #Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
-loeffler_geneIDs <- getBM(attributes = c("affy_hg_u133_plus_2","hgnc_symbol","chromosome_name","start_position","end_position","band"), 
-      values = str_replace_all(rownames(loeffler), pattern = "-", "_"), 
-      filters = "affy_hg_u133_plus_2", 
-      mart=useMart(biomart="ensembl", 
-                   dataset="hsapiens_gene_ensembl"))
-chemokines_homostatic <- c("CXCL12", "CCL21", "CXCL13", "CCL19")
-chemokines_ifn <- c("CXCL9", "CXCL10", "CXCL11")
+loeffler <- readRDS("") 
+#Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
+#Full object available upon request
 
-chemokines_homostatic <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_homostatic], "_", "-")
-chemokines_ifn <- str_replace_all(loeffler_geneIDs$affy_hg_u133_plus_2[loeffler_geneIDs$hgnc_symbol %in% chemokines_ifn], "_", "-")
+diagnosis_colors <- c("Tonsil" = "#8D60B5", "FL 1/2/3A" = "#8BCDE0", "FL 3B" = "#089c9c", "DLBCL" = "#67B86E")
 
-loeffler$mean_homostatic  <- colMeans(loeffler@assays$RNA@data[chemokines_homostatic,])
-loeffler$mean_ifn <- colMeans(loeffler@assays$RNA@data[chemokines_ifn,])
+# Define chemokine scores
+metadata <- as.data.frame(loeffler@meta.data)
+genes <- rownames(loeffler@assays$RNA)[rownames(loeffler@assays$RNA) %in% c("CXCL12", "CCL21", "CCL19", "CXCL13", "CXCL9", "CXCL10", "CXCL11")]
+metadata <-  cbind(metadata, FetchData(loeffler, genes))
 
-loeffler$Type <- loeffler$diagnosis
-loeffler$Type[loeffler$diagnosis %in% c("DLBCL ABC","DLBCL Double-Hit", "DLBCL GCB", "DLBCL unclassified")] <- "DLBCL"
-loeffler$Type[loeffler$diagnosis %in% c("FL BCL2-break NA","FL BCL2-break neg", "FL BCL2-break pos")] <- "FL"
-loeffler$Type[loeffler$diagnosis %in% c("tonsil")] <- "control"
+metadata$ifn_mean <- rowMeans(metadata[,c("CXCL9", "CXCL10", "CXCL11")], na.rm=TRUE)
+metadata$homeo_mean <- rowMeans(metadata[,c("CXCL12", "CCL21", "CCL19", "CXCL13")], na.rm=TRUE)
 
-p1 <- loeffler@meta.data %>% filter(Type %in% c("control", "FL", "DLBCL")) %>% 
-  ggboxplot(x="Type", y="mean_homostatic", fill="Type", outlier.shape = NA, 
-                                       order = c("control", "FL", "DLBCL"))+
-  ggbeeswarm::geom_beeswarm(aes(x = Type,y = mean_homostatic, fill=Type),
-                            size = 1, alpha = 0.3, priority='density', cex = 1.3)+
-  ggpubr::stat_compare_means(method = "t.test", label = "p.signif",  p.adjust.method = "BH",
-                     comparisons = list(c("FL", "DLBCL"), 
-                                        c("FL", "control"), 
-                                        c("DLBCL", "control")))+
-  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E" ))+
-  xlab("")+
-  ylab("Mean gene expression")+
-  theme_bw()+
+metadata$OS_status <- as.numeric(as.character(metadata$OS_status))
+
+# Tidy disease annotation
+metadata <- mutate(metadata, Type_binned2 = case_when(Type_binned %in% c("DLBCL ABC", "DLBCL GCB", "DLBCL unclassified")~"DLBCL",
+                                                           Type_binned %in% c("FL 3b")~"FL 3B",
+                                                           Type_binned == "Tonsil"~"Tonsil",
+                                                           Type_binned == "FL 1/2/3a"~"FL 1/2/3A"))
+
+metadata$Type_binned2 <- factor(metadata$Type_binned2, levels = c("Tonsil", "FL 1/2/3A", "FL 3B", "DLBCL"))
+comp <- list(c("Tonsil", "FL 1/2/3A"), c("FL 3B", "FL 1/2/3A"),  c("DLBCL", "FL 1/2/3A"), c("DLBCL", "FL 3B"), c("Tonsil", "DLBCL"))
+
+
+p1 <- ggplot(metadata, aes(Type_binned2, homeo_mean)) + 
+    geom_boxplot(aes(fill=Type_binned2), outlier.size=0.5, width = 0.5) + 
+    geom_quasirandom(method = "pseudorandom", size = 1, alpha = 0.3)+
+    labs(y = "Mean gene expression", 
+         x = "") + 
+    scale_fill_manual(values=diagnosis_colors) +
+    theme(axis.title.x = element_text(size = 12), 
+          axis.title.y = element_text(size = 12)) +
+    scale_y_continuous(breaks=c(0,1,2,3,4), limits = c(0,5.5))+
+    ggtitle("Homeostatic chemokines") +
+    theme_bw()+
     theme(
       plot.title = element_text(size = 13, face = "bold"),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       panel.background = element_rect(color = "black"), 
-      aspect.ratio=1,
-      legend.position="none",
-      axis.text.y = element_text(size = 11, color = "black"),
-      axis.text.x = element_text(size = 11, color = "black"),
-      axis.title.x = element_text(size = 13, color = "black", vjust = 1),
-      axis.title.y = element_text(size = 13, color = "black", vjust = 1))+
-  ggtitle("Structural chemokines")
+      legend.position = "none",
+      axis.text.y = element_text(size = 13, color = "black"),
+      axis.text.x = element_text(size = 13, color = "black"),
+      axis.title.x = element_text(size = 13, color = "black"),
+      aspect.ratio = 1,
+      axis.title.y = element_text(size = 13, color = "black"))+
+    stat_compare_means(method = "t.test", label = "p.signif", comparisons = comp, 
+                       label.y = c(3.8, 3.8, 3.6, 4.2, 4.6), hide.ns = F)
 
 
-p2 <- loeffler@meta.data %>% filter(Type %in% c("control", "FL", "DLBCL")) %>% 
-  ggboxplot(x="Type", y="mean_ifn", fill="Type", outlier.shape = NA, 
-                                       order = c("control", "FL", "DLBCL")) +
-  ggbeeswarm::geom_beeswarm(aes(x = Type,y = mean_ifn, fill=Type),
-                            size = 1, alpha = 0.3, priority='density', cex = 1.3)+
-  ggpubr::stat_compare_means(method = "t.test", label = "p.signif",
-                     comparisons = list(c("FL", "DLBCL"), 
-                                        c("FL", "control"), 
-                                        c("DLBCL", "control")))+
-  scale_fill_manual(values = c("#8D60B5", "#8BCDE0", "#67B86E" ))+
-  xlab("")+
-  ylab("Mean gene expression")+
-  theme_bw()+
+p2 <- ggplot(metadata, aes(Type_binned2, ifn_mean)) + 
+    geom_boxplot(aes(fill=Type_binned2), outlier.size=0.5, width = 0.5) + 
+    geom_quasirandom(method = "pseudorandom", size = 1, alpha = 0.3)+
+    labs(y = "Mean gene expression", 
+         x = "") + 
+    scale_fill_manual(values=diagnosis_colors) +
+    theme(axis.title.x = element_text(size = 12), 
+          axis.title.y = element_text(size = 12)) +
+    scale_y_continuous(breaks=c(0,1,2,3,4), limits = c(0,5.5))+
+    ggtitle("Inflammatory chemokines") +
+    theme_bw()+
     theme(
       plot.title = element_text(size = 13, face = "bold"),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       panel.background = element_rect(color = "black"), 
-      aspect.ratio=1,
-      legend.position="none",
-      axis.text.y = element_text(size = 11, color = "black"),
-      axis.text.x = element_text(size = 11, color = "black"),
-      axis.title.x = element_text(size = 13, color = "black", vjust = 1),
-      axis.title.y = element_text(size = 13, color = "black", vjust = 1))+
-  ggtitle("Inflammatory chemokines")
+      legend.position = "none",
+      axis.text.y = element_text(size = 13, color = "black"),
+      axis.text.x = element_text(size = 13, color = "black"),
+      axis.title.x = element_text(size = 13, color = "black"),
+      aspect.ratio = 1,
+      axis.title.y = element_text(size = 13, color = "black"))+
+    stat_compare_means(method = "t.test", label = "p.signif", comparisons = comp, 
+                       label.y = c(3.8, 3.8, 3.6, 4.2, 4.6), hide.ns = F)
 
-p1+p2
+p1/p2
 ```
 
+## H and I
 ```{r Panels H, I }
-#For Xenium related plots and analysis, refer to https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/20250304_xenium.Rmd
+#For Xenium related plots and analysis, also refer to https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/20250304_xenium.Rmd
+
+# Load data
+xenium_seurat <- readRDS("") #Available in zenodo as "xenium_merged_seurat.rds"
+
+# Left panels (cell types)
+
+fl <- subset(merged_obj, type %in% c("FL"))
+metadata_fl <- as.data.frame(fl@meta.data)
+DefaultAssay(fl) <- "RNA"
+genes <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11", "CXCR3", "IFNG")
+fl_df <-  cbind(metadata_fl, FetchData(fl, genes))
+
+panel_h_left <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  # Plot the background points with #f0f0f0
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("BEC", "DLBCL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 0.75, color = "#f0f0f0", shape = 16) +
+  
+    # Plot the "FL-B" cells with alpha = 0
+  geom_point(data = subset(fl_df, cell_type_binned == "FL-B"),
+             aes(alpha = 0), size = 0.75, color = "#0EBCE8", shape = 16) +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(fl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.75, shape = 16) +
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "DLBCL-B" = "#f0f0f0",
+    "FL-B" = "#0EBCE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        aspect.ratio = 1,
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"))
+
+
+dlbcl <- subset(merged_obj, type %in% c("DLBCL"))
+metadata_dlbcl <- as.data.frame(dlbcl@meta.data)
+DefaultAssay(dlbcl) <- "RNA"
+dlbcl_df <-  cbind(metadata_dlbcl, FetchData(dlbcl, genes))
+
+panel_i_left <- ggplot(dlbcl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y, color = cell_type_binned)) +
+  # Plot the background points with #f0f0f0
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("BEC", "FL-B", "Myeloid", "T-TOX", "T-REG", "T-FH", "T-H")),
+             aes(alpha = 1), size = 0.75, color = "#f0f0f0", shape = 16) +
+  
+    # Plot the "DLBCL-B" cells with alpha = 0
+  geom_point(data = subset(dlbcl_df, cell_type_binned == "DLBCL-B"),
+             aes(alpha = 0), size = 0.75, color = "#83CAE8", shape = 16) +
+  
+  # Plot all other colored points with alpha = 1
+  geom_point(data = subset(dlbcl_df, cell_type_binned %in% c("FRC", "rFRC", "FDC")),
+             aes(alpha = 1), size = 0.75, shape = 16) +
+  scale_color_manual(values = c(
+    "BEC" = "#f0f0f0",
+    "Myeloid" = "#f0f0f0",
+    "T-TOX" = "#f0f0f0",
+    "T-REG"= "#f0f0f0", 
+    "T-FH"= "#f0f0f0", 
+    "T-H" = "#f0f0f0",
+    "FL-B" = "#f0f0f0",
+    "DLBCL-B" = "#83CAE8",
+    "FRC" = "#BEDEA6",
+    "rFRC" = "#2AC200",
+    "FDC" = "#088B1A"))+
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+
+# Right panels (CXCL13 - CXCR5
+
+lr_fl <- read.csv("path/to/.csv") #available in source data for Figure 2
+lr_dlbcl <- read.csv("path/to/.csv") #available in source data for Figure 2
+
+lr_fl <- lr_fl %>%
+  mutate(order = ifelse(ligand_receptor_assoc %in% c(1,2,3,4,5), 1, 0))
+
+lr_dlbcl <- lr_dlbcl %>%
+  mutate(order = ifelse(ligand_receptor_assoc %in% c(1,2,3,4,5), 1, 0))
+
+panel_h_right <- ggplot(lr_fl, aes(x = nucleus_centroid_x.x, y = nucleus_centroid_y.x, color = ligand_receptor_assoc)) +
+  geom_point(data = subset(lr_fl, order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 0.1) +
+  geom_point(data = subset(lr_fl, order == 1),
+             size = 0.5, aes(color = ligand_receptor_assoc), alpha = 1) +
+  #geom_point(size = 0.5, alpha = 0.7) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+
+panel_i_right <- ggplot(lr_dlbcl, aes(x = nucleus_centroid_x.x, y = nucleus_centroid_y.x, color = ligand_receptor_assoc)) +
+  geom_point(data = subset(lr_dlbcl, order == 0),
+             size = 0.5, color = "#f9f9f9", alpha = 1) +
+  geom_point(data = subset(lr_dlbcl, order == 1),
+             size = 0.5, aes(color = ligand_receptor_assoc), alpha = 1) +
+  scale_color_gradientn(colors = c("#f9f9f9", "#AD2E24")) +
+  theme_bw() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_rect(color = "black"),
+        aspect.ratio = 1)
+
+
+panel_h_left + panel_h_right
+panel_i_left + panel_i_right
 ```
 
 ```{r Panel K}
 #For TCR seq related analysis, see https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
 ## Object also used for TCR clonal expansion analysis in Figure 3
-## Dataset from Roider et al 2024 (Nat Cell Bio)
+## Dataset from Roider et al. Nat Cell Biol 2024
 ## 5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
-## Note that here we only focused on rLN, DLBCL and FL
+## Analysis was focused on rLN, FL and DLBCL
 ```
