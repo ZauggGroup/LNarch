@@ -237,7 +237,7 @@ ggplot(data=de_frc_rln_dlbcl, aes(x=log2FoldChange, y=-log10(pvalue), col=diffex
 
 ## C
 ```{r Panel C}
-loeffler <- readRDS("") 
+loeffler <- readRDS("/path/to/loeffler.rds") 
 #Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
 #Full object available upon request
 
@@ -326,7 +326,7 @@ xenium_seurat <- readRDS("") #Available in zenodo as "xenium_merged_seurat.rds"
 
 # Left panels (cell types)
 
-fl <- subset(merged_obj, type %in% c("FL"))
+fl <- subset(xenium_seurat, type %in% c("FL"))
 metadata_fl <- as.data.frame(fl@meta.data)
 DefaultAssay(fl) <- "RNA"
 genes <- c("CXCL13", "CXCL12", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11", "CXCR3", "IFNG")
@@ -364,7 +364,7 @@ panel_h_left <- ggplot(fl_df, aes(x = nucleus_centroid_x, y = nucleus_centroid_y
         panel.background = element_rect(color = "black"))
 
 
-dlbcl <- subset(merged_obj, type %in% c("DLBCL"))
+dlbcl <- subset(xenium_seurat, type %in% c("DLBCL"))
 metadata_dlbcl <- as.data.frame(dlbcl@meta.data)
 DefaultAssay(dlbcl) <- "RNA"
 dlbcl_df <-  cbind(metadata_dlbcl, FetchData(dlbcl, genes))
