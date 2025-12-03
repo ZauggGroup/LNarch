@@ -22,7 +22,7 @@ library(patchwork)
 # Load objects
 ```{r setup, include=FALSE}
 scRNA <- readRDS("") #Available in zenodo as scRNA_LN_stromal_cells.rds
-out_dir <- "/g/scb2/zaugg/amathiou/2021July_LNS012/" #Needs to be defined
+out_dir <- "" #Needs to be defined
 source("/path/to/Figure_config.R")
 ```
 
