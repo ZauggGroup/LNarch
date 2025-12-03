@@ -97,7 +97,9 @@ filtered_signature_matrix <- filtered_signature_matrix %>% column_to_rownames(va
 # Panels
 ## A
 ```{r}
-loeffler <- readRDS("/path/loeffler_wirth_nonBL_symbolsconv.rds")
+loeffler <- readRDS("path/to/loeffler_wirth_nonBL_symbolsconv.rds")
+#Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
+#Full object available upon request
 ```
 
 ## Define chemokine scores
