@@ -1,14 +1,15 @@
 ---
-title: "Figure5_bulk_validation.Rmd"
+title: "Figure5.Rmd"
 output: html_document
 date: "2024-11-28"
 ---
 
-#Set WE and OD 
+#Set WD and OD 
 ```{r}
 # Personalize
 setwd("xxxx")
 out_dir <- "xxxx"
+source("/path/to/Figure_config.R")
 ```
 
 # Load libraries
@@ -22,7 +23,6 @@ library(ggplot2)
 library(ggpubr)
 library(ggforce)
 library(scatterpie)
-library(ComplexHeatmap)
 library(circlize)
 library(patchwork)
 library(FNN)
@@ -46,8 +46,8 @@ library(knitr)
 
 # General information regarding bulk validation data
 Bulk transcriptomics data as well as survival data used as validation cohorts in this study are publicly available under the links below, with the following exceptions: 
-- Survival data from Löffler-Wirth et al. 2019 was kindly provided by Hans Binder and team (please contact our corresponding authors for access)
-- Survival data from Lenz et al. 2008 and Reddy et al. 2017 was kindly provided by Georg Lenz and team (please contact our corresponding authors for access)
+- Survival data from Löffler-Wirth et al. 2019 was kindly provided by Hans Binder and team (source data for all figures generated in this manuscript are provided; please contact our corresponding authors for full data access)
+- Survival data from Lenz et al. 2008 and Reddy et al. 2017 was kindly provided by Georg Lenz and team (ource data for all figures generated in this manuscript are provided; please contact our corresponding authors for full data access)
 
 Normalized data and metadata per dataset were assembled as Seurat objects for downstream analysis. For data processing details beyond specified in the primary literature we kindly refer to our Methods section "Analysis of bulk transcriptomics data". 
 
@@ -72,29 +72,30 @@ https://gdc.cancer.gov/about-data/publications/DLBCL-2018
 # Single-cell-derived signature matrix for CIBERSORTx
 The signature matrix used for CIBERSORTx analysis was generated as follows:
 
-- Load scRNA-seq Seurat object presented in this study (Zenodo)
-
+- Load scRNA-seq Seurat object presented in this study (Zenodo, "scRNA_LN_stromal_cells.rds")
 - Idents(seurat) <- "Clusters_paper"
-
 - Define marker genes per cell type using Seurat::FindAllMarkers with min.pct = 0.25 and logfc.threshold = 0.25
-
 - Filter markers per cell type by p_val_adj < 0.01 and avg_log2FC > 1, and retaining the top 100 genes by logFC
-
 - Extract average expression per cell type using Seurat::AverageExpression
-
 - Reduce redundancy (highly correlated genes within a cell type can lead to redundancy) using caret::findCorrelation and remove highly correlated genes with corr > 0.9
 
-The signature matrix used downstream for cell type deconvolution is available in Zenodo ("signature_matrix.txt", see link in the manuscript).
+The signature matrix used downstream for cell type deconvolution is available in Zenodo ("cibersortx_signature_matrix.txt").
+
+CIBERSORTx was run in the web application using 
+perm: 500
+verbose: TRUE
+QN: TRUE
+
 ```{r}
 # Signature matrix from scRNA-seq experiments described in Fig. 1A-B
 
-filtered_signature_matrix <- read.table("/path/signature_matrix.txt", header = TRUE, sep = "\t")
+filtered_signature_matrix <- read.table("/path/cibersortx_signature_matrix.txt", header = TRUE, sep = "\t")
 rownames(filtered_signature_matrix) <- NULL
 filtered_signature_matrix <- filtered_signature_matrix %>% column_to_rownames(var = "Gene")
 ```
 
-# Loeffler et al. 2019
-## Load data
+# Panels
+## A
 ```{r}
 loeffler <- readRDS("/path/loeffler_wirth_nonBL_symbolsconv.rds")
 ```
@@ -126,77 +127,8 @@ comp <- list(c("Tonsil", "FL 1/2/3A"), c("FL 3B", "FL 1/2/3A"),  c("DLBCL", "FL 
 table(metadata$Type_binned2)
 ```
 
-## Chemokine boxplots (Fig. 2C)
-```{r}
-pdf(paste0(out_dir, "loeffler_box_org_final.pdf"), width = 4, height = 4)
-ggplot(metadata, aes(Type_binned2, homeo_mean)) + 
-    geom_boxplot(aes(fill=Type_binned2), outlier.size=0.5, width = 0.5) + 
-    #geom_beeswarm(cex = 1, size = 1, alpha = 0.5)+
-    geom_quasirandom(method = "pseudorandom", size = 1, alpha = 0.3)+
-    #stat_density_2d() +
-    #guides(fill=guide_legend(title="Type")) +
-    labs(y = "Mean gene expression", 
-         x = "") + 
-    scale_fill_manual(values=diagnosis_colors) +
-    theme(axis.title.x = element_text(size = 12), 
-          axis.title.y = element_text(size = 12)) +
-    scale_y_continuous(breaks=c(0,1,2,3,4), limits = c(0,5.5))+
-    ggtitle("Homeostatic chemokines") +
-    theme_bw()+
-    theme(
-      plot.title = element_text(size = 13, face = "bold"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(color = "black"), 
-      #legend.text=element_text(size=13, color = "black"),
-      #legend.title=element_blank(),
-      legend.position = "none",
-      axis.text.y = element_text(size = 13, color = "black"),
-      axis.text.x = element_text(size = 13, color = "black"),
-      axis.title.x = element_text(size = 13, color = "black"),
-      aspect.ratio = 1,
-      axis.title.y = element_text(size = 13, color = "black"))+
-    stat_compare_means(method = "t.test", label = "p.signif", comparisons = comp, 
-                       label.y = c(3.8, 3.8, 3.6, 4.2, 4.6), hide.ns = F)
-dev.off()
-```
-
-```{r}
-pdf(paste0(out_dir, "loeffler_box_infl_final.pdf"), width = 4, height = 4)
-ggplot(metadata, aes(Type_binned2, ifn_mean)) + 
-    geom_boxplot(aes(fill=Type_binned2), outlier.size=0.5, width = 0.5) + 
-    #geom_beeswarm(cex = 1, size = 1, alpha = 0.5)+
-    geom_quasirandom(method = "pseudorandom", size = 1, alpha = 0.3)+
-    #stat_density_2d() +
-    #guides(fill=guide_legend(title="Type")) +
-    labs(y = "Mean gene expression", 
-         x = "") + 
-    scale_fill_manual(values=diagnosis_colors) +
-    theme(axis.title.x = element_text(size = 12), 
-          axis.title.y = element_text(size = 12)) +
-    scale_y_continuous(breaks=c(0,1,2,3,4), limits = c(0,5.5))+
-    ggtitle("Inflammatory chemokines") +
-    theme_bw()+
-    theme(
-      plot.title = element_text(size = 13, face = "bold"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(color = "black"), 
-      #legend.text=element_text(size=13, color = "black"),
-      #legend.title=element_blank(),
-      legend.position = "none",
-      axis.text.y = element_text(size = 13, color = "black"),
-      axis.text.x = element_text(size = 13, color = "black"),
-      axis.title.x = element_text(size = 13, color = "black"),
-      aspect.ratio = 1,
-      axis.title.y = element_text(size = 13, color = "black"))+
-    stat_compare_means(method = "t.test", label = "p.signif", comparisons = comp, 
-                       label.y = c(3.8, 3.8, 3.6, 4.2, 4.6), hide.ns = F)
-dev.off()
-```
-
-
-## Clustering based on chemokine expression (Fig. 5A)
+# Panels
+## A
 ```{r}
 genes_of_interest <- c("CXCL13", "CXCL12", "CCL19", "CCL21", 
                        "CXCL9", "CXCL10", "CXCL11"
