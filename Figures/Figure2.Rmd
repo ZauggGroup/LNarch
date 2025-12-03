@@ -237,7 +237,7 @@ ggplot(data=de_frc_rln_dlbcl, aes(x=log2FoldChange, y=-log10(pvalue), col=diffex
 
 ## C
 ```{r Panel C}
-loeffler <- readRDS("/path/to/loeffler.rds") 
+loeffler <- readRDS("path/to/loeffler_wirth_nonBL_symbolsconv.rds")
 #Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
 #Full object available upon request
 
