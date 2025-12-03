@@ -32,7 +32,7 @@ source("/path/to/Figure_config.R")
 ## Subset to stromal cells
 stroma_obj <- subset(
   scRNA,
-  subset = Abe_binned %in% c("BEC", "LEC", "Mesenchymal")
+  subset = Abe_binned %in% c("BEC", "LEC", "FRC")
 )
 
 custom_colors <- c(
