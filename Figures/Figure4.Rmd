@@ -509,7 +509,7 @@ p_zones + p_infl
 ```
 
 
-#H - I
+# H - I
 ```{r}
 scriabin <- read_excel("") %>% column_to_rownames(var = "...1") #source data for Figure 4H and I provided in the manuscript (Seurat module score across inflammatory (CXCL9/10/11=CXCR3) and homeostatic chemokine-receptor pairs (CXCL13=CXCR5, CXCL12=CXCR4, CCL19/21=CCR7) from Scriabin. 
 
@@ -587,7 +587,7 @@ p_i <- ggplot(scriabin, aes(x = sender_group, y = `Inflammatory chemokines and r
   scale_fill_manual(values = dis_colors)
 ```
 
-#J
+# J
 
 ```{r}
 diff_score <- read.csv("") #source data for Figure 4J provided in the manuscript: diffusion score = mean euclidean distances between cells in the PCA space
