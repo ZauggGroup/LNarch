@@ -18,8 +18,8 @@ library(pals)
 
 # Load objects
 ```{r setup, include=FALSE}
-scRNA <- readRDS("") #Available in zenodo as scRNA_LN_stromal_cells.rds
-codex <-  readRDS()#Available in the source data of the manuscript
+scRNA <- readRDS("") #Available in zenodo as "scRNA_LN_stromal_cells.rds"
+codex <-  readRDS("") #Available in zenodo as "mIF_seurat_final.rds"
 source("/path/to/Figure_config.R")
 ```
 
