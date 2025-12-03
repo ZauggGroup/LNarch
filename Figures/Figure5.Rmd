@@ -45,9 +45,9 @@ library(knitr)
 ```
 
 # General information regarding bulk validation data
-Bulk transcriptomics data as well as survival data used as validation cohorts in this study are publicly available under the links below, with the following exceptions: 
-- Survival data from Löffler-Wirth et al. 2019 was kindly provided by Hans Binder and team (source data for all figures generated in this manuscript are provided; please contact our corresponding authors for full data access)
-- Survival data from Lenz et al. 2008 and Reddy et al. 2017 was kindly provided by Georg Lenz and team (ource data for all figures generated in this manuscript are provided; please contact our corresponding authors for full data access)
+Survival data used are publicly available under the links below, with the following exceptions: 
+- Survival data from Löffler-Wirth et al. 2019 was kindly provided by Hans Binder and team (please contact our corresponding authors for full data access, source data for all figures generated are provided in this manuscript)
+- Survival data from Lenz et al. 2008 and Reddy et al. 2017 was kindly provided by Georg Lenz and team (please contact our corresponding authors for full data access, source data for all figures generated are provided in this manuscript)
 
 Normalized data and metadata per dataset were assembled as Seurat objects for downstream analysis. For data processing details beyond specified in the primary literature we kindly refer to our Methods section "Analysis of bulk transcriptomics data". 
 
@@ -81,10 +81,7 @@ The signature matrix used for CIBERSORTx analysis was generated as follows:
 
 The signature matrix used downstream for cell type deconvolution is available in Zenodo ("cibersortx_signature_matrix.txt").
 
-CIBERSORTx was run in the web application using 
-perm: 500
-verbose: TRUE
-QN: TRUE
+CIBERSORTx was run in the web application, see code below
 
 ```{r}
 # Signature matrix from scRNA-seq experiments described in Fig. 1A-B
@@ -94,19 +91,16 @@ rownames(filtered_signature_matrix) <- NULL
 filtered_signature_matrix <- filtered_signature_matrix %>% column_to_rownames(var = "Gene")
 ```
 
-# Panels
-## A
+# Loeffler et al. 2019
+## Define chemokine scores
 ```{r}
 loeffler <- readRDS("path/to/loeffler_wirth_nonBL_symbolsconv.rds")
 #Data from Loeffler-Wirth, H. et al. A modular transcriptome map of mature B cell lymphomas. Genome Med. 11, 27 (2019).
 #Full object available upon request
-```
 
-## Define chemokine scores
-```{r}
+
 metadata <- as.data.frame(loeffler@meta.data)
 
-# Define chemokine scores
 genes <- rownames(loeffler@assays$RNA)[rownames(loeffler@assays$RNA) %in% c("CXCL12", "CCL21", "CCL19", "CXCL13", "CXCL9", "CXCL10", "CXCL11")]
 metadata <-  cbind(metadata, FetchData(loeffler, genes))
 
@@ -125,12 +119,8 @@ metadata$Type_binned2 <- factor(metadata$Type_binned2, levels = c("Tonsil", "FL 
 comp <- list(c("Tonsil", "FL 1/2/3A"), c("FL 3B", "FL 1/2/3A"),  c("DLBCL", "FL 1/2/3A"), c("DLBCL", "FL 3B"), c("Tonsil", "DLBCL"))
 ```
 
-```{r}
-table(metadata$Type_binned2)
-```
 
-# Panels
-## A
+## Figure 2A
 ```{r}
 genes_of_interest <- c("CXCL13", "CXCL12", "CCL19", "CCL21", 
                        "CXCL9", "CXCL10", "CXCL11"
@@ -147,9 +137,7 @@ seurat_subset@meta.data <- mutate(seurat_subset@meta.data,
 # Run UMAP
 seurat_subset <- RunPCA(seurat_subset, features = genes_of_interest)
 seurat_subset <- RunUMAP(seurat_subset, dims = 1:6)
-```
 
-```{r}
 # Extract UMAP coordinates
 umap_coords <- Embeddings(seurat_subset, "umap")
 
@@ -164,14 +152,10 @@ neighbor_fractions <- t(apply(nn$nn.index, 1, function(indices) {
 neighbor_fractions <- as.data.frame(neighbor_fractions)
 colnames(neighbor_fractions) <- names(diagnosis_colors)
 neighbor_fractions$id <- rownames(neighbor_fractions)
-```
 
-```{r}
 # Combine UMAP coordinates with neighbor fractions
 umap_with_fractions <- cbind(as.data.frame(umap_coords), neighbor_fractions)
-```
 
-```{r, fig.height=6, fig.width=6}
 diagnosis_colors <- c("Tonsil" = "#8D60B5", "FL 1/2/3A" = "#8BCDE0", "FL 3B" = "#089c9c", "DLBCL" = "#67B86E")
 
 # Create the pie chart plot
@@ -197,15 +181,11 @@ pie <- ggplot(umap_with_fractions, aes(x = UMAP_1, y = UMAP_2)) +
       axis.title.y = element_blank(),
       aspect.ratio = 1)+
   labs(x = "UMAP1", y = "UMAP2")
-```
 
-```{r}
 m1 <- metadata %>% rownames_to_column(var = "Sample")
 m2 <- umap_with_fractions %>% rownames_to_column(var = "Sample")
 plotData <- left_join(m1, m2, by = "Sample")
-```
 
-```{r}
 p1 <- ggplot(plotData, aes(x = UMAP_1, y = UMAP_2, color = homeo_mean)) +
   geom_point(size = 1.5, alpha = 0.95) +
   scale_color_gradientn(
@@ -251,60 +231,42 @@ p2 <- ggplot(plotData, aes(x = UMAP_1, y = UMAP_2, color = ifn_mean)) +
       aspect.ratio = 1
   )+
   labs(x = "UMAP1", y = "UMAP2")
-```
 
-```{r, fig.height=8, fig.width=8}
 combined_plot <- (pie | (p1 / p2 + plot_layout(guides = 'auto'))) + plot_layout(guides = 'collect')
 ```
 
-```{r, fig.height=8, fig.width=8}
-pdf(paste0(out_dir, "loeffler_Fig5A.pdf"), width = 10, height = 8)
-combined_plot
-dev.off()
-```
-
-```{r}
-pdf(paste0(out_dir, "loeffler_Fig5A_expression.pdf"), width = 5, height = 3)
-p1 + p2
-dev.off()
-```
 
 ## Survival: DLBCL ~ homeostatic chemokines (Extended Data Fig. 10D)
-### Fit OS ~ binarized chemokine expression status
-```{r}
-## Prepare data
 
-# Filter DLBCL samples
+```{r}
+# Fit OS ~ binarized chemokine expression status
+
+# Prepare data
+
+## Filter DLBCL samples
 metadata_filtered <- metadata[metadata$Type_binned %in% c("DLBCL ABC", "DLBCL GCB", "DLBCL unclassified"),]
 
-# Filter out samples with available survival data (n=546)
+## Filter out samples with available survival data (n=546)
 metadata_filtered <- metadata_filtered[metadata_filtered$OS_status %in% c(0,1),]
 
-# Filter out untreated samples
+## Filter out untreated samples
 #metadata_filtered <- metadata_filtered[metadata$RELAPSE %in% c("no"),]
 
 metadata_filtered <- metadata_filtered %>% 
   dplyr::select(GCBABC, OS_status, OS_t, ifn_mean, homeo_mean, CXCL12, CXCL13, CCL21, CCL19, CXCL9, CXCL10, CXCL11)
 
 colnames(metadata_filtered) <- c("COO", "OS_status", "OS_t", "ifn_mean", "homeo_mean", "CXCL12", "CXCL13", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11")
-```
 
-```{r}
-## Define cutpoint and categorize
+# Define cutpoint and categorize
 res.cut <- surv_cutpoint(metadata_filtered, time = "OS_t", event = "OS_status", variables = c("homeo_mean"), minprop = 0.1)
 plot(res.cut, "homeo_mean", palette = "npg")
 
 res.cat <- surv_categorize(res.cut)
-```
 
-```{r}
-## Fit survival 
+# Fit survival 
 fit <- survfit(Surv(OS_t, OS_status) ~homeo_mean, data = res.cat)
-```
 
-### Kaplan-Meier
-```{r, fig.height=5, fig.width=5}
-## Kaplan-Meier
+# Kaplan-Meier
 
 plot_surv <- ggsurvplot(fit, 
   surv.median.line = "v", # Add medians survival
@@ -341,12 +303,10 @@ plot_surv$plot <- plot_surv$plot +
         axis.title.y = element_text(size = 14),
         plot.title = element_text(size = 14, face = "bold"))
 
-pdf(paste0(out_dir, "loeffler_homeo_km.pdf"), width = 5, height = 4)
 print(plot_surv)
-dev.off()
-```
 
-```{r, fig.width=2, fig.height=4}
+# Expression dotplot
+
 homeo_expr <- mutate(metadata_filtered, res.cat = ifelse(homeo_mean > 1.895449, "High", "Low"))
 homeo_expr$res.cat <- factor(homeo_expr$res.cat, levels = c("High", "Low"))
 
@@ -356,10 +316,6 @@ dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 1.895449, linetype = 2)+
   #coord_flip()+
   ylab("Mean expression")+
@@ -380,13 +336,7 @@ dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
         #element_text(size = 14, color = "black",face = "bold", vjust = 1),
       axis.title.x = element_blank())
 
-pdf(paste0(out_dir, "loeffler_homeo_expression_dot.pdf"), width = 2, height = 4)
-print(dp)
-dev.off()
-```
-
-### Multivariate Cox regression (Cox proportional hazard model)
-```{r}
+# Multivariate Cox regression (Cox proportional hazard model)
 cat <-  data.frame(res.cat) 
 cat <- cat %>% 
   mutate(sampleID = rownames(.)) %>%
@@ -402,11 +352,6 @@ cox_data <- mutate(cox_data, COO = case_when(COO %in% c("GCB")~"GCB",
 cox_data$COO <- factor(cox_data$COO, levels = c("GCB", "Unclassified", "ABC"))
 cox_data$COO <- relevel(cox_data$COO, ref = "GCB")
 
-# Save
-saveRDS(cox_data, file = "/path/loeffler_coxdata.rds")
-```
-
-```{r}
 # Fit a multivariable Cox proportional hazards model
 cox_model <- coxph(
   Surv(OS_t, OS_status) ~ homeo_mean.x + COO,
@@ -415,256 +360,19 @@ cox_model <- coxph(
 
 # Display a summary of the Cox model
 summary(cox_model)
-```
 
-```{r}
 # Check the proportional hazards assumption
 cox.zph(cox_model)
-```
 
-```{r, fig.height=6, fig.width=10}
-pdf(paste0(out_dir, "loeffler_homeo_cox.pdf"), width = 8, height = 3)
+# Forest plot
 forest_model(cox_model)
-dev.off()
-```
-
-
-## Survival: FL Grade 1/2/3A ~ homeostatic chemokines (Extended Data Fig. 10G)
-```{r}
-## Prepare data
-
-# Filter FL samples
-metadata_filtered <- metadata[metadata$Type_binned %in% c("FL 1/2/3a"),]
-
-# Filter out samples with available survival data
-metadata_filtered <- metadata_filtered[metadata_filtered$OS_status %in% c(0,1),]
-
-# Filter out untreated samples
-#metadata_filtered <- metadata_filtered[metadata$RELAPSE %in% c("no"),]
-
-metadata_filtered <- metadata_filtered %>% 
-  dplyr::select(GCBABC, OS_status, OS_t, ifn_mean, homeo_mean, CXCL12, CXCL13, CCL21, CCL19, CXCL9, CXCL10, CXCL11)
-
-colnames(metadata_filtered) <- c("COO", "OS_status", "OS_t", "ifn_mean", "homeo_mean", "CXCL12", "CXCL13", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11")
-
-```
-
-```{r}
-## Define cutpoint and categorize
-res.cut <- surv_cutpoint(metadata_filtered, time = "OS_t", event = "OS_status", variables = c("homeo_mean"), minprop = 0.1)
-plot(res.cut, "homeo_mean", palette = "npg")
-
-res.cat <- surv_categorize(res.cut)
-```
-
-```{r}
-## Fit survival 
-fit <- survfit(Surv(OS_t, OS_status) ~homeo_mean, data = res.cat)
-```
-
-```{r, fig.height=5, fig.width=5}
-## Kaplan-Meier
-
-plot_surv <- ggsurvplot(fit, 
-  surv.median.line = "v", # Add medians survival
-  legend.title = "",
-  title = "Homeostatic chemokines",
-  xlab = "Years",
-  ylab = "Overall survival",
-  #legend.labs = c("0-1", expression(.>1)),
-  legend = "none",
-  pval = TRUE,
-  pval.coord = c(7.5,0.75),
-  pval.method.coord = c(7.5,0.85),
-  pval.method = T,
-  conf.int = FALSE,
-  #conf.int.style = "step",
-  risk.table = F,
-  #risk.table.title = " ",
-  #risk.table.fontsize = 5,
-  #tables.height = 0.25,
-  fontsize = 4.5,
-  #tables.theme = theme_risktable_boxed(),
-  surv.plot.height = 1,
-  palette = c("#ebb356", "#417dae"),
-  ggtheme = theme_classic() # Change ggplot2 theme
-)  
-
-
-plot_surv$plot <- plot_surv$plot + 
-  theme(legend.text = element_text(size = 12),
-        legend.title = element_text(size = 12),
-        axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_text(size = 14),
-        axis.title.y = element_text(size = 14),
-        plot.title = element_text(size = 14, face = "bold"))
-```
-
-```{r}
-pdf(paste0(out_dir, "loeffler_homeo_fl_km.pdf"), width = 5, height = 4)
-print(plot_surv)
-dev.off()
-```
-
-```{r, fig.width=2, fig.height=4}
-homeo_expr <- mutate(metadata_filtered, res.cat = ifelse(homeo_mean > 3.292861, "High", "Low"))
-homeo_expr$res.cat <- factor(homeo_expr$res.cat, levels = c("High", "Low"))
-
-homeo_expr$homeostatic <- rep("homeostatic")
-
-dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) + 
-  geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
-  scale_color_manual(values = c("#ebb356", "#417dae")) +
-  theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
-  geom_hline(yintercept = 3.292861, linetype = 2)+
-  #coord_flip()+
-  ylab("Mean expression")+
-  xlab("")+
-  ggtitle("")+
-  theme(
-      plot.title = element_text(size = 14, color = "black", face = "bold"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(), 
-      #aspect.ratio=0.2,
-      legend.position="none",
-      #legend.text = element_text(size = 14, color = "black"),
-      #legend.title = element_text(size = 14, color = "black", face = "bold"),
-      axis.text.y = element_text(size = 12, color = "black"),
-      axis.text.x = element_blank(),
-      axis.title.y = element_text(size = 14, color = "black"),
-        #element_text(size = 14, color = "black",face = "bold", vjust = 1),
-      axis.title.x = element_blank())
-
-```
-
-```{r}
-pdf(paste0(out_dir, "loeffler_homeo_expression_fl_dot.pdf"), width = 2, height = 4)
-print(dp)
-dev.off()
-```
-
-## Survival: FL Grade 3B ~ homeostatic chemokines (Extended Data Fig. 10H)
-```{r}
-## Prepare data
-
-# Filter FL3B samples
-metadata_filtered <- metadata[metadata$Type_binned %in% c("FL 3b"),]
-
-# Filter out samples with available survival data
-metadata_filtered <- metadata_filtered[metadata_filtered$OS_status %in% c(0,1),]
-
-# Filter out untreated samples
-#metadata_filtered <- metadata_filtered[metadata$RELAPSE %in% c("no"),]
-
-metadata_filtered <- metadata_filtered %>% 
-  dplyr::select(GCBABC, OS_status, OS_t, ifn_mean, homeo_mean, CXCL12, CXCL13, CCL21, CCL19, CXCL9, CXCL10, CXCL11)
-
-colnames(metadata_filtered) <- c("COO", "OS_status", "OS_t", "ifn_mean", "homeo_mean", "CXCL12", "CXCL13", "CCL21", "CCL19", "CXCL9", "CXCL10", "CXCL11")
-```
-
-```{r}
-## Define cutpoint and categorize
-res.cut <- surv_cutpoint(metadata_filtered, time = "OS_t", event = "OS_status", variables = c("homeo_mean"), minprop = 0.1)
-plot(res.cut, "homeo_mean", palette = "npg")
-
-res.cat <- surv_categorize(res.cut)
-```
-
-```{r}
-## Fit survival 
-fit <- survfit(Surv(OS_t, OS_status) ~homeo_mean, data = res.cat)
-```
-
-```{r, fig.height=5, fig.width=5}
-## Kaplan-Meier
-plot_surv <- ggsurvplot(fit, 
-  surv.median.line = "v", # Add medians survival
-  legend.title = "",
-  title = "Homeostatic chemokines",
-  xlab = "Years",
-  ylab = "Overall survival",
-  #legend.labs = c("0-1", expression(.>1)),
-  legend = "none",
-  pval = TRUE,
-  pval.coord = c(7.5,0.75),
-  pval.method.coord = c(7.5,0.85),
-  pval.method = T,
-  conf.int = FALSE,
-  #conf.int.style = "step",
-  risk.table = F,
-  #risk.table.title = " ",
-  #risk.table.fontsize = 5,
-  #tables.height = 0.25,
-  fontsize = 4.5,
-  #tables.theme = theme_risktable_boxed(),
-  surv.plot.height = 1,
-  palette = c("#ebb356", "#417dae"),
-  ggtheme = theme_classic() # Change ggplot2 theme
-)  
-
-
-plot_surv$plot <- plot_surv$plot + 
-  theme(legend.text = element_text(size = 12),
-        legend.title = element_text(size = 12),
-        axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 12),
-        axis.title.x = element_text(size = 14),
-        axis.title.y = element_text(size = 14),
-        plot.title = element_text(size = 14, face = "bold"))
-
-pdf(paste0(out_dir, "loeffler_homeo_fl3b_km.pdf"), width = 5, height = 4)
-print(plot_surv)
-dev.off()
-```
-
-```{r, fig.width=2, fig.height=4}
-homeo_expr <- mutate(metadata_filtered, res.cat = ifelse(homeo_mean > 2.542142, "High", "Low"))
-homeo_expr$res.cat <- factor(homeo_expr$res.cat, levels = c("High", "Low"))
-
-homeo_expr$homeostatic <- rep("homeostatic")
-
-dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) + 
-  geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
-  scale_color_manual(values = c("#ebb356", "#417dae")) +
-  theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
-  geom_hline(yintercept = 2.542142, linetype = 2)+
-  #coord_flip()+
-  ylab("Mean expression")+
-  xlab("")+
-  ggtitle("")+
-  theme(
-      plot.title = element_text(size = 14, color = "black", face = "bold"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(), 
-      #aspect.ratio=0.2,
-      legend.position="none",
-      #legend.text = element_text(size = 14, color = "black"),
-      #legend.title = element_text(size = 14, color = "black", face = "bold"),
-      axis.text.y = element_text(size = 12, color = "black"),
-      axis.text.x = element_blank(),
-      axis.title.y = element_text(size = 14, color = "black"),
-        #element_text(size = 14, color = "black",face = "bold", vjust = 1),
-      axis.title.x = element_blank())
-
-pdf(paste0(out_dir, "loeffler_homeo_expression_fl3b_dot.pdf"), width = 2, height = 4)
-print(dp)
-dev.off()
 ```
 
 ## CIBERSORTx (Extended Data Fig. 4)
-### Preparations, documentation of run parameters and loading output data
+
 ```{r}
+### Preparations, documentation of run parameters and loading output data
+
 # Tidy bulk data for CibersortX
 loeffler_df <- as.data.frame(loeffler[["RNA"]]$counts)
 any(duplicated(rownames(loeffler_df)))
@@ -837,13 +545,6 @@ draw(heatmap, heatmap_legend_side = "bottom",
 
 ```
 
-```{r, fig.height=15, fig.width=25}
-pdf(paste0(out_dir, "loeffler_csx_minmax_nonB_hm.pdf"), width = 18, height =8)
-draw(heatmap, heatmap_legend_side = "bottom", 
-    annotation_legend_side = "bottom")
-dev.off()
-```
-
 ### Exemplary boxplots of cell type abundance with cross-entity variation (Extended Data Fig. 4B)
 ```{r}
 ### Query cross-entity differences of cell type fractions
@@ -906,7 +607,6 @@ stat.new <- stat %>%
 stat.new <- subset(stat.new, cell_type %in% c("T.FH", "FDC", "FRC", "rFRC", "BEC", "rBEC"))
 stat.new$cell_type <- factor(stat.new$cell_type, levels = c("T.FH", "FDC", "FRC", "rFRC", "BEC", "rBEC"))
 
-pdf(paste0(out_dir, "loeffler_csx_box.pdf"), width = 10, height = 6)
 ggplot(plotData, aes(x = Type_binned2, y = fraction)) +
   geom_boxplot(aes(fill = Type_binned2), outlier.size = 0.5, width = 0.5) +
   facet_wrap(~ cell_type, scales = "free_y", ncol = 6) +
@@ -927,7 +627,6 @@ ggplot(plotData, aes(x = Type_binned2, y = fraction)) +
     axis.title.x = element_blank(),
     axis.title.y = element_text(size = 12, color = "black", vjust = 1)
   )
-dev.off()
 ```
 
 ### Correlations of cell type abundance and chemokine expression (Extended Data Fig. 4C-D)
@@ -984,7 +683,6 @@ corr_plot_data <- cor_data %>%
   )
 
 # Plot
-pdf(paste0(out_dir, "loeffler_csx_chemokines_corrplot_FDR.pdf"), width = 7, height = 7)
 ggplot(corr_plot_data, aes(x = Cell_Fractions, y = Chemokines)) +
   geom_point(aes(size = log_P_value, fill = Correlation), shape = 21, color = "black") +
   scale_size_continuous(range = c(3, 9), name = "Significance (-log10 adj P)", limits = c(0, 100)) +
@@ -996,12 +694,10 @@ ggplot(corr_plot_data, aes(x = Cell_Fractions, y = Chemokines)) +
         axis.text.x = element_text(size = 12, color = "black", angle = 90, hjust = 1, vjust = 0.5),
         axis.title.x = element_text(size = 12, color = "black")) +
   labs(x = "Cell Fractions", y = "")
-dev.off()
 ```
 
 ```{r}
 csx_mod$Type_binned2 <- factor(csx_mod$Type_binned2, levels = c("Tonsil", "FL 1/2/3A", "FL 3B", "DLBCL"))
-pdf(paste0(out_dir, "loeffler_frc_ccl21_corr_disease.pdf"), width = 5, height = 5)
 ggplot(csx_mod, aes(CCL21, FDC, color = Type_binned2)) +  # Change color mapping
     geom_point(alpha = 0.7, size = 3) + 
     scale_color_manual(values = c("#8D60B5", "#8BCDE0", "#089c9c", "#67B86E")) +  # Use custom colors
@@ -1024,11 +720,9 @@ ggplot(csx_mod, aes(CCL21, FDC, color = Type_binned2)) +  # Change color mapping
       aspect.ratio = 1,
       axis.title.y = element_text(size = 13, color = "black")
     )
-dev.off()
 ```
 
 ```{r}
-pdf(paste0(out_dir, "loeffler_frc_cxcl12_corr_disease.pdf"), width = 5, height = 5)
 ggplot(csx_mod, aes(CXCL12, FDC, color = Type_binned2)) +  # Change color mapping
     geom_point(alpha = 0.7, size = 3) + 
     scale_color_manual(values = c("#8D60B5", "#8BCDE0", "#089c9c", "#67B86E")) +  # Use custom colors
@@ -1051,38 +745,7 @@ ggplot(csx_mod, aes(CXCL12, FDC, color = Type_binned2)) +  # Change color mappin
       aspect.ratio = 1,
       axis.title.y = element_text(size = 13, color = "black")
     )
-dev.off()
 ```
-
-### Correlation of FDC fraction and CXCL13 expression (Fig. 2D)
-```{r}
-csx_mod$Type_binned2 <- factor(csx_mod$Type_binned2, levels = c("Tonsil", "FL 1/2/3A", "FL 3B", "DLBCL"))
-pdf(paste0(out_dir, "loeffler_fdc_cxcl13_corr_disease.pdf"), width = 5, height = 5)
-ggplot(csx_mod, aes(CXCL13, FDC, color = Type_binned2)) +  # Change color mapping
-    geom_point(alpha = 0.7, size = 3) + 
-    scale_color_manual(values = c("#8D60B5", "#8BCDE0", "#089c9c", "#67B86E")) +  # Use custom colors
-    labs(y = "FDC fraction", 
-         x = "CXCL13 expression") + 
-    geom_smooth(method = lm, se = FALSE, colour = "black", size = 1, linetype = "dashed") +
-    stat_cor(colour = "black", size = 4) + 
-    scale_y_continuous(limits = c(0, 0.04)) +
-    theme_bw() +
-    theme(
-      plot.title = element_text(size = 13, face = "bold"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_rect(color = "black"), 
-      legend.text = element_text(size = 13, color = "black"),
-      legend.title = element_blank(),
-      axis.text.y = element_text(size = 10, color = "black"),
-      axis.text.x = element_text(size = 10, color = "black"),
-      axis.title.x = element_text(size = 13, color = "black"),
-      aspect.ratio = 1,
-      axis.title.y = element_text(size = 13, color = "black")
-    )
-dev.off()
-```
-
 ### Survival: DLBCL ~ FDC fraction (Extended Data Fig. 4F)
 ```{r}
 csx_dlbcl <- csx %>% subset(Type_binned %in% c("DLBCL ABC", "DLBCL GCB", "DLBCL unclassified"))
@@ -1094,14 +757,10 @@ plot(res.cut, "FDC", palette = "npg")
 print(res.cut$cutpoint)
 
 res.cat <- surv_categorize(res.cut)
-```
 
-```{r}
 ### Fit survival 
 fit <- survfit(Surv(OS_t, OS_status) ~FDC, data = res.cat)
-```
 
-```{r, fig.height=5, fig.width=5}
 ### Kaplan-Meier
 
 plot_surv <- ggsurvplot(fit, 
@@ -1138,14 +797,9 @@ plot_surv$plot <- plot_surv$plot +
         axis.title.x = element_text(size = 14),
         axis.title.y = element_text(size = 14),
         plot.title = element_text(size = 14, face = "bold"))
-
-
-pdf(paste0(out_dir, "loeffler_fdc_km.pdf"), width = 5, height = 4)
 print(plot_surv)
-dev.off()
-```
 
-```{r, fig.width=2, fig.height=4}
+
 csx_fdc <- mutate(csx, res.cat = ifelse(FDC > 0.0009930802, "High", "Low"))
 csx_fdc$res.cat <- factor(csx_fdc$res.cat, levels = c("High", "Low"))
 
@@ -1155,10 +809,6 @@ dp <- ggplot(csx_fdc, aes(fdc, FDC, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 0.0009930802, linetype = 2)+
   #coord_flip()+
   ylab("")+
@@ -1178,13 +828,38 @@ dp <- ggplot(csx_fdc, aes(fdc, FDC, color = res.cat)) +
       axis.title.y = element_text(size = 14, color = "black"),
         #element_text(size = 14, color = "black",face = "bold", vjust = 1),
       axis.title.x = element_blank())
-
-pdf(paste0(out_dir, "loeffler_fdc_dot.pdf"), width = 2, height = 4)
 print(dp)
-dev.off()
 ```
 
-### Chemokine UMAP ~ FDC fraction (Fig. 5D)
+## Figure 2D
+```{r}
+csx_mod$Type_binned2 <- factor(csx_mod$Type_binned2, levels = c("Tonsil", "FL 1/2/3A", "FL 3B", "DLBCL"))
+ggplot(csx_mod, aes(CXCL13, FDC, color = Type_binned2)) +  # Change color mapping
+    geom_point(alpha = 0.7, size = 3) + 
+    scale_color_manual(values = c("#8D60B5", "#8BCDE0", "#089c9c", "#67B86E")) +  # Use custom colors
+    labs(y = "FDC fraction", 
+         x = "CXCL13 expression") + 
+    geom_smooth(method = lm, se = FALSE, colour = "black", size = 1, linetype = "dashed") +
+    stat_cor(colour = "black", size = 4) + 
+    scale_y_continuous(limits = c(0, 0.04)) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 13, face = "bold"),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(color = "black"), 
+      legend.text = element_text(size = 13, color = "black"),
+      legend.title = element_blank(),
+      axis.text.y = element_text(size = 10, color = "black"),
+      axis.text.x = element_text(size = 10, color = "black"),
+      axis.title.x = element_text(size = 13, color = "black"),
+      aspect.ratio = 1,
+      axis.title.y = element_text(size = 13, color = "black")
+    )
+```
+
+
+## Figure 5D
 ```{r}
 fdc <- csx %>% dplyr::select(MPINR, FDC)
 coords <- umap_with_fractions %>% rownames_to_column(var = "MPINR")
@@ -1192,7 +867,6 @@ plotData <- left_join(coords, fdc, by = "MPINR") %>% column_to_rownames(var = "M
 ```
 
 ```{r}
-pdf(paste0(out_dir, "loeffler_Fig5_fdc_umap.pdf"), width = 3, height = 3)
 ggplot(plotData, aes(x = UMAP_1, y = UMAP_2, color = FDC)) +
   geom_point(size = 1.5, alpha = 0.95) +
   scale_color_gradientn(
@@ -1215,12 +889,11 @@ ggplot(plotData, aes(x = UMAP_1, y = UMAP_2, color = FDC)) +
       aspect.ratio = 1
   )+
   labs(x = "UMAP1", y = "UMAP2")
-dev.off()
 ```
 
 
 # Reddy et al. 2017
-## Load data
+## Load data 
 ```{r}
 se <- readRDS("/path/reddy2017_seurat.rds")
 ```
@@ -1308,27 +981,19 @@ plot_surv$plot <- plot_surv$plot +
         axis.title.y = element_text(size = 14),
         plot.title = element_text(size = 14, face = "bold"))
 
-pdf(paste0(out_dir, "reddy_homeo_km.pdf"), width = 5, height = 4)
 print(plot_surv)
-dev.off()
-```
 
-```{r}
+
 homeo_expr <- mutate(reddy_meta, res.cat = ifelse(homeo_mean > 5.29, "High", "Low"))
 homeo_expr$res.cat <- factor(homeo_expr$res.cat, levels = c("High", "Low"))
 
 homeo_expr$homeostatic <- rep("homeostatic")
 
-pdf(paste0(out_dir, "reddy_homeo_expression_dot_rev.pdf"), width = 4, height = 1.5)
 ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) + 
   geom_jitter(width = 0.3, size = 3, alpha = 0.6) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   coord_flip()+
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 5.29, linetype = 2)+
   #coord_flip()+
   ylab("Mean expression")+
@@ -1348,11 +1013,9 @@ ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
       axis.title.y = element_blank(),
         #element_text(size = 14, color = "black",face = "bold", vjust = 1),
       axis.title.x = element_blank())
-dev.off()
-```
 
 ### Quick permutation test
-```{r}
+
 # Observed cutpoint and p-value
 res.cut <- surv_cutpoint(reddy_meta, time = "OS_t", event = "OS_status",
                          variables = "homeo_mean", minprop = 0.1)
@@ -1418,11 +1081,6 @@ cox_data$COO <- factor(cox_data$COO, levels = c("GCB", "Unclassified", "ABC"))
 cox_data$IPI <- relevel(cox_data$IPI, ref = "Low")
 cox_data$IPI <- factor(cox_data$IPI, levels = c("Low", "Intermediate", "High"))
 
-# Save 
-saveRDS(cox_data, file = "/path/reddy_coxdata.rds")
-```
-
-```{r}
 # Fit a multivariable Cox proportional hazards model
 cox_model <- coxph(
   Surv(OS_t, OS_status) ~ homeo_mean.x + IPI + COO,
@@ -1431,17 +1089,13 @@ cox_model <- coxph(
 
 # Display a summary of the Cox model
 summary(cox_model)
-```
 
-```{r}
-#To ensure the Cox model is valid, check the proportional hazards assumption
+# To ensure the Cox model is valid, check the proportional hazards assumption
 cox.zph(cox_model)
-```
 
-```{r, fig.height=6, fig.width=10}
-pdf(paste0(out_dir, "reddy_homeo_cox.pdf"), width = 8, height = 4)
+# Forest plot
 forest_model(cox_model)
-dev.off()
+
 ```
 
 ### Kaplan-Meier stratified by IPI (Extended Data Fig. 10E)
@@ -1505,7 +1159,7 @@ res.cat_df <- res.cat_df %>%
     homeo_mean = factor(homeo_mean, levels = c("low", "high"))
   )
 
-# Step 4: Run stratified pairwise log-rank tests
+# Run stratified pairwise log-rank tests
 pairwise_logrank <- lapply(levels(res.cat_df$IPI), function(level) {
   dat <- res.cat_df %>% filter(IPI == level)
   
@@ -1520,11 +1174,10 @@ pairwise_logrank <- lapply(levels(res.cat_df$IPI), function(level) {
   data.frame(IPI_level = level, p_value = pval)
 })
 
-# Step 5: Combine and (optionally) adjust p-values
+# Combine and adjust p-values
 pairwise_logrank_df <- do.call(rbind, pairwise_logrank)
 pairwise_logrank_df$adj_pval_BH <- p.adjust(pairwise_logrank_df$p_value, method = "BH")
 
-# Done!
 print(pairwise_logrank_df)
 ```
 
@@ -1950,10 +1603,6 @@ dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 10.36, linetype = 2)+
   #coord_flip()+
   ylab("Mean expression")+
@@ -2289,10 +1938,6 @@ dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 9.36, linetype = 2)+
   #coord_flip()+
   ylab("Mean expression")+
@@ -2475,10 +2120,6 @@ dp <- ggplot(csx_fdc, aes(fdc, FDC, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 0, linetype = 2)+
   #coord_flip()+
   ylab("")+
@@ -2638,10 +2279,6 @@ dp <- ggplot(homeo_expr, aes(homeostatic, homeo_mean, color = res.cat)) +
   geom_jitter(width = 0.3, size = 3, alpha = 0.8) +
   scale_color_manual(values = c("#ebb356", "#417dae")) +
   theme_bw()+
-  #scale_y_continuous(limits = c(-3, 0.5), breaks = c(-3,-2,-1,0))+
-  #scale_x_discrete(labels=c(
-  #  "Sulfosuccinimidyl Oleate" = "SO",
-  #  "10,12-Tricosadiynoic acid" = "10,12-TA"))+
   geom_hline(yintercept = 10.97, linetype = 2)+
   #coord_flip()+
   ylab("Mean expression")+
