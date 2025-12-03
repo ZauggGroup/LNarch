@@ -26,10 +26,10 @@ library(aws.s3)
 # Load objects
 ```{r setup, include=FALSE}
 # scRNA-seq
-scRNA <- readRDS("") #Available in zenodo as scRNA_LN_stromal_cells.rds
+scRNA <- readRDS("") #Available in zenodo as "scRNA_LN_stromal_cells.rds"
 
 # Scriabin data
-interaction_potential <- readRDS("") #Available in zenodo as interaction_potential.rds
+interaction_potential <- readRDS("") #Available in zenodo as "interaction_potential.rds"
 source("/path/to/Figure_config.R")
 ```
 
@@ -339,9 +339,8 @@ p3 <- as.data.frame(data) %>% dplyr::filter(zones=="T cell zone like ngh") %>% d
 ```
 
 ## E
-For this code the k6Data_rLN_percent_pairs.csv data set from Zenodo is needed
 ```{r}
-k6Data_rLN <- read_csv("path/to/k6Data_rLN_percent_pairs.csv")
+k6Data_rLN <- read_csv("") #percent of total interactions in a KNN-based cell-cell interaction analysis (k=6) of rLN samples in the mIF dataset; available in zenodo as "mIF_knn_k6_pct_totalinteractions_rLN.csv"
 
 k6Data_rLN$summary_zone <- k6Data_rLN$id_nhood.x
 k6Data_rLN$summary_zone[k6Data_rLN$id_nhood.x %in% c("BEC-rich T zone", "T zone")] <- "T zone"
@@ -434,35 +433,44 @@ interaction_potential@meta.data %>%
 ## G
 ### left
 ```{r}
-interaction_potential@meta.data %>% 
-  group_by(zones,sender_group) %>% tally() %>% 
-  #filter(!zones=="other") %>% 
-  ggplot(aes(x=factor(zones, levels = rev(c("T cell zone like ngh", "B cell zone like ngh", "Inflammatory ngh", "other"))),
-             y=n, fill=sender_group))+
-  geom_bar(position="fill",stat="identity")+
-  scale_fill_manual(values = annotation_colors$Type_binned, name="Disease state")+
+interaction_potential@meta.data$sender_group <- factor(interaction_potential@meta.data$sender_group, levels = c("DLBCL", "FL", "rLN"))
 
-  theme_bw()+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        panel.background = element_rect(colour = "grey60", size=0.5))+
-  xlab("")+
-  ylab("Scaled fractions per zone")+
+interaction_potential@meta.data <- mutate(interaction_potential@meta.data, zones_binned = case_when(zones == "other"~"Other",
+                                                                                                    zones == "Inflammatory ngh"~"Inflammatory",
+                                                                                                    zones == "B cell zone like ngh"~"B cell zone",
+                                                                                                    zones == "T cell zone like ngh"~"T cell zone"))
+
+interaction_potential@meta.data$zones_binned <- factor(interaction_potential@meta.data$zones_binned, levels = c("Other", "Inflammatory", "B cell zone", "T cell zone"))
+
+p_zones <- interaction_potential@meta.data %>% 
+  group_by(zones_binned,sender_group) %>% tally() %>% 
+ggplot(aes(x = zones_binned, y = n, fill = sender_group)) + 
+  geom_bar(stat = "identity", position = "fill", width = 0.5) + 
+  theme_bw() + 
+  theme(
+    plot.title   = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = "black"), 
+    aspect.ratio = 1.25,
+    axis.text.y  = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(), 
+    axis.text.x  = element_text(size = 12, color = "black")
+  ) + 
+  scale_fill_manual(values = annotation_colors$Type_binned) +
+  labs(y = "Fraction per zone") +
   coord_flip()
-
-
 ```
 
 ### right 
 ```{r}
 interaction_potential$sender_new_v4 <- ifelse(interaction_potential$sender_Clusters_final %in% c("FDC", "med-FRC", "MRC/IFR", "PvC", "SMC", "TRC"), 
-                                   "FRC", merged_obj$sender_Clusters_final )
+                                   "FRC", interaction_potential$sender_Clusters_final)
 interaction_potential$reciver_new_v4 <- ifelse(interaction_potential$receiver_Clusters_final %in% c("FDC", "med-FRC", "MRC/IFR", "PvC", "SMC", "TRC"), 
-                                   "FRC", interaction_potential$receiver_Clusters_final )
-interaction_potential$sender_reciver_v4 <- paste0(merged_obj$sender_new_v4, "_", merged_obj$reciver_new_v4  )
+                                   "FRC", interaction_potential$receiver_Clusters_final)
+interaction_potential$sender_reciver_v4 <- paste0(interaction_potential$sender_new_v4, "_", interaction_potential$reciver_new_v4)
 
 freq <- interaction_potential@meta.data %>% group_by(zones, sender_patient,sender_group) %>% 
   count(sender_reciver_v4) %>% ungroup() %>% group_by(sender_patient, sender_group) %>%     
@@ -472,75 +480,148 @@ freq <- interaction_potential@meta.data %>% group_by(zones, sender_patient,sende
 cutoff <- quantile(freq$sum, 8/10)
 freq <- freq %>% filter(sum>0.30)
 
-ggplot(freq, aes(x=reorder(sender_reciver_v4, sum) , y=rel_count, fill=sender_group)) + 
-  geom_bar(stat='identity') + theme_classic() + scale_fill_manual(values = annotation_colors$Type_binned) +
-  xlab("")+coord_flip()
+freq$sender_reciver_v4 <- sub("^LAF", "rFRC", freq$sender_reciver_v4)
+
+freq$sender_group <- factor(freq$sender_group, levels = c("DLBCL", "FL", "rLN"))
+
+p_infl <- ggplot(freq, aes(x=reorder(sender_reciver_v4, sum) , y=rel_count, fill=sender_group)) + 
+  geom_bar(stat ="identity", width = 0.5) + 
+  theme_bw() + 
+  theme(
+    plot.title   = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = "black"), 
+    aspect.ratio = 1.25,
+    axis.text.y  = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    axis.title.y = element_blank(), 
+    axis.text.x  = element_text(size = 12, color = "black")
+  ) + 
+  scale_fill_manual(values = annotation_colors$Type_binned) +
+  labs(y = "Fraction per interaction") +
+  scale_x_discrete(position = "top") +
+  coord_flip()
+
+
+p_zones + p_infl
 ```
 
 
-#H
-```{r Panel H, fig.height=4, fig.width=5, fig.cap="Violin plot showing the difusness score"}
-interaction_potential_sampled <- readRDS("/omics/odcf/analysis/OE0285_projects/human-bone-marrow/Lymphoma/bd_rhapsody/2021_May/Analysis/LIANA/merged_obj_sub_downsampled_rowmean_pca_0.3.rds")
+#H - I
+```{r}
+scriabin <- read_excel("") %>% column_to_rownames(var = "...1") #source data for Figure 4H and I provided in the manuscript (Seurat module score across inflammatory (CXCL9/10/11=CXCR3) and homeostatic chemokine-receptor pairs (CXCL13=CXCR5, CXCL12=CXCR4, CCL19/21=CCR7) from Scriabin. 
 
-ggplot(interaction_potential_sampled@meta.data, aes(y= rowmean_pca, x = sender_group, fill=sender_group))+
-  geom_violin(scale = "width")+#, pt.size = 0)+
-  geom_boxplot(width=0.2, outlier.size = 0)+
-  scale_fill_manual(values = annotation_colors$Type_binned, name="disease")+
-  theme_bw()+
-  theme(
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(),
-    strip.background = element_blank(),
-    panel.background = element_rect(colour = "grey60", size=0.5))+
-  scale_y_log10()+
-  xlab("")+
-  ylab("Diffusness score")+
-  ggtitle("Diffusness score")+NoLegend()
-
-interaction_potential_sampled@meta.data %>% rstatix::t_test(rowmean_pca~sender_group)
+Calculation (for reference):
+#merged_obj <- AddModuleScore(merged_obj, features = list(c("CXCL13=CXCR5", "CXCL12=CXCR4", "CCL19=CCR7", "CCL21=CCR7"),
+#                                                                 c("CXCL9=CXCR3" ,"CXCL10=CXCR3" , "CXCL11=CXCR3")), 
+#                                 name = c("homeostatic", "ifn"), nbin = 2, ctrl = 20)
+```
+```{r}
+dis_colors <- c("#67B86E", "#8BCDE0", "#8D60B5")
+comparisons <- list(c("rLN", "DLBCL"), c("FL", "DLBCL"))
 ```
 
-
-# I
-```{r Panel I, fig.height=4, fig.width=5, fig.cap="Violin plot showing the R-L of homeostatic chemokines"}
-merged_obj <- AddModuleScore(merged_obj, features = list(c("CXCL13=CXCR5", "CXCL12=CXCR4", "CCL19=CCR7", "CCL21=CCR7"),
-                                                                 c("CXCL9=CXCR3" ,"CXCL10=CXCR3" , "CXCL11=CXCR3")), 
-                                 name = c("homeostatic", "ifn"), nbin = 2, ctrl = 20)
-
-ggplot(interaction_potential@meta.data, aes(y=homeostatic1 , x = sender_group, fill=sender_group))+
-  geom_violin()+#, pt.size = 0)+
-  geom_boxplot(width=0.2, outlier.size = 0)+
-  scale_fill_manual(values = annotation_colors$Type_binned, name="disease")+
-  theme_bw()+
+```{r}
+p_h <- ggplot(scriabin, aes(x = sender_group, y = `Homeostatic chemokines and receptors`, fill = sender_group)) +
+  geom_violin(scale = "width", trim = FALSE, width = 0.75) +
+  geom_boxplot(inherit.aes = TRUE, width = 0.1, outlier.size = 0, alpha = 0.5, notch = FALSE) + 
+  geom_hline(yintercept = mean(scriabin$`Homeostatic chemokines and receptors`), linetype = 2) + # Add horizontal line at base mean
+  ggtitle("Homeo") + 
+  scale_y_continuous(limits = c(-1, 4.5), 
+                     breaks = c(-1,0,1,2,3,4)) +
+  coord_flip()+
   theme(
-    panel.grid.major = element_blank(), 
+    plot.title   = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    strip.background = element_blank(),
-    #legend.position = "bottom",
-    panel.background = element_rect(colour = "grey60", size=0.5))+
-  xlab("")+
-  ylab("Organizing score")+
-  ggtitle("Organizing score")+NoLegend()
+    panel.background = element_rect(fill = "white", color = "black"), 
+    aspect.ratio = 0.75,
+    axis.text.y  = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+    axis.title.y = element_blank(), 
+    axis.text.x  = element_text(size = 12, color = "black")
+  ) + 
+  labs(x = "", y = "Module Score") +
+  stat_compare_means(
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.format",
+    label.y = c(3.85, 4.2),
+    comparisons = comparisons
+  ) +
+  scale_fill_manual(values = dis_colors)
 
+p_i <- ggplot(scriabin, aes(x = sender_group, y = `Inflammatory chemokines and receptors`, fill = sender_group)) +
+  geom_violin(scale = "width", trim = F, width = 0.75) +
+  geom_boxplot(inherit.aes = TRUE, width = 0.1, outlier.size = 0, alpha = 0.5, notch = FALSE) + 
+  geom_hline(yintercept = mean(scriabin$`Inflammatory chemokines and receptors`), linetype = 2) + # Add horizontal line at base mean
+  ggtitle("Infl") + 
+  scale_y_continuous(limits = c(-1, 4.5), 
+                     breaks = c(-1,0,1,2,3,4)) +
+  coord_flip()+
+  theme(
+    plot.title   = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = "black"), 
+    aspect.ratio = 0.75,
+    axis.text.y  = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+    axis.title.y = element_blank(), 
+    axis.text.x  = element_text(size = 12, color = "black")
+  ) + 
+  labs(x = "", y = "Module Score") +
+  stat_compare_means(
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.format",
+    label.y = c(3.85, 4.2),
+    comparisons = comparisons
+  ) +
+  scale_fill_manual(values = dis_colors)
 ```
 
 #J
-```{r  Panel J, fig.height=4, fig.width=5, fig.cap="Violin plot feature plot showing the R-L of homeostatic chemokines"}
-FeaturePlot(interaction_potential, features = c("ifn2"), cols = annotation_colors$features)
 
-ggplot(interaction_potential@meta.data, aes(y= inf2, x = sender_group, fill=sender_group))+
-  geom_violin(scale = "width")+#, pt.size = 0)+
-  geom_boxplot(width=0.2, outlier.size = 0)+
-  scale_fill_manual(values = annotation_colors$Type_binned, name="disease")+
-  theme_bw()+
+```{r}
+diff_score <- read.csv("") #source data for Figure 4J provided in the manuscript: diffusion score = mean euclidean distances between cells in the PCA space
+
+p_j <- ggplot(diff_score, aes(x = sender_group, y = rowmean_pca, fill = sender_group)) +
+  geom_violin(scale = "width", trim = F, width = 0.75) +
+  geom_boxplot(inherit.aes = TRUE, width = 0.1, outlier.size = 0, alpha = 0.5, notch = FALSE) + 
+  geom_hline(yintercept = mean(scriabin$rowmean_pca), linetype = 2) + # Add horizontal line at base mean
+  ggtitle("Diff") + 
+  #scale_y_continuous(limits = c(0,30), 
+  #                   breaks = c(0,10,20,30)) +
+  scale_y_log10()+
+  coord_flip()+
   theme(
-    panel.grid.major = element_blank(), 
+    plot.title   = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    strip.background = element_blank(),
-    #legend.position = "bottom",
-    panel.background = element_rect(colour = "grey60", size=0.5))+
-  xlab("")+
-  ylab("Inflammotory score")+
-  ggtitle("Inflammotory score")+NoLegend()
+    panel.background = element_rect(fill = "white", color = "black"), 
+    aspect.ratio = 0.75,
+    axis.text.y  = element_text(size = 12, color = "black"),
+    axis.title.x = element_text(size = 12, color = "black"),
+    #axis.title.y = element_text(size = 15, color = "black", vjust = 1), 
+    axis.title.y = element_blank(), 
+    axis.text.x  = element_text(size = 12, color = "black")
+  ) + 
+  labs(x = "", y = "Mean Euclidean distances") +
+  stat_compare_means(
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.format",
+    #label.y = c(26, 28),
+    comparisons = comparisons
+  ) +
+  scale_fill_manual(values = dis_colors)
 ```
 
