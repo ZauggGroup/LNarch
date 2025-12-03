@@ -160,14 +160,14 @@ Heatmap(or_df, col = col_fun, name = "log2OR") #panel B, not that from this we s
 ```
 
 # Panels E, F, G
-#For TCR seq related analysis, see https://github.com/ZauggGroup/LNarch/edit/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
+#For TCR seq related analysis, see https://github.com/ZauggGroup/LNarch/main/Preprocessing/scTCR_reanalysis_revisions.Rmd
 ## Object also used for TCR clonal expansion analysis in Figure 3
 ## Dataset from Roider et al. Nat Cell Biol 2024
 ## 5' TCR seq single cell object projected to 3' scRNA-seq dataset similarly to the original publication
 ## Analysis was focused on rLN, FL and DLBCL
 
 ```{r Panel E left}
-DF_TCRrep <- readRDS("/g/scb2/zaugg/amathiou/2021July_LNS012/10.TCRseq/202402_TCRrepertoire.rds") #Get info from Zenodo
+DF_TCRrep <- readRDS("/202402_TCRrepertoire.rds") #Available in zenodo: Tcell clonal information 
 
 DF_5prime_umap <- DF_TCRrep %>% 
   dplyr::select(refUMAP_1, refUMAP_2, predicted.celltype, Entity, PatientID.x, ifng.x) %>% 
